@@ -1,0 +1,122 @@
+services:
+
+  timeseries-db:
+    image: cassandra:4.1
+    container_name: gridsense_cassandra
+    restart: unless-stopped
+    ports:
+      - "9042:9042"
+    environment:
+      CASSANDRA_CLUSTER_NAME: "GridSenseCluster"
+      MAX_HEAP_SIZE: "512M"
+      HEAP_NEWSIZE: "128M"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool status | grep -q '^UN'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  cassandra-init:
+    image: cassandra:4.1
+    depends_on:
+      timeseries-db:
+        condition: service_healthy
+    volumes:
+      - ./cql/init.cql:/init.cql
+    command: bash -c "sleep 5 && cqlsh timeseries-db -f /init.cql"
+    restart: on-failure
+
+  graph-db:
+    image: neo4j:5-community
+    container_name: gridsense_neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD}"
+      NEO4J_server_memory_heap_max__size: "512M"
+      NEO4J_server_memory_heap_initial__size: "256M"
+    volumes:
+      - neo4j_data:/data
+      - ./neo4j/import:/import
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "http://localhost:7474"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+
+  neo4j-init:
+    image: neo4j:5-community
+    depends_on:
+      graph-db:
+        condition: service_healthy
+    volumes:
+      - ./neo4j/import:/import
+    environment:
+      NEO4J_PASSWORD: "${NEO4J_PASSWORD}"
+    command: >
+      bash -c "cypher-shell -a bolt://graph-db:7687 -u neo4j -p ${NEO4J_PASSWORD} -f /import/seed.cypher"
+    restart: on-failure
+
+  catalog-db:
+    image: mongo:7
+    container_name: gridsense_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+billing-db:
+    image: postgres:15
+    container_name: gridsense_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./pg/init.sql:/docker-entrypoint-initdb.d/init.sql   
+
+  cache:
+    image: redis:7-alpine
+    container_name: gridsense_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  api:
+    build: ./api
+    container_name: gridsense_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      timeseries-db:
+        condition: service_healthy
+      graph-db:
+        condition: service_healthy
+      catalog-db:
+        condition: service_started
+      billing-db:
+        condition: service_started
+      cache:
+        condition: service_started
+
+volumes:
+  cassandra_data:
+  neo4j_data:
+  mongo_data:
+  pg_data:
+  redis_data:
+
+networks:
+  default:
+    name: gridsense_net
