@@ -224,3 +224,16 @@ MATCH (a:Substation {substation_id: 'SS_005'})
 MATCH (b:Substation {substation_id: 'SS_009'})
 MERGE (a)-[r:ALTERNATIVE_FEED {tie_switch_id: 'TS_004'}]->(b)
 ON CREATE SET r.normally_open = true;
+
+
+// ── NORMALIZE node_id PROPERTY ───────────────────────────────────
+// grid.py (Trap 4/6 fixes) matches nodes generically via {node_id: $id}.
+// Each label uses a domain-specific identifier (gsp_id, substation_id,
+// asset_id, meter_id) — this copies that value into a common node_id
+// property so the API can MATCH any node type uniformly.
+// Idempotent: SET to the same value twice is harmless — no duplicates.
+
+MATCH (n:GridSupplyPoint) SET n.node_id = n.gsp_id;
+MATCH (n:Substation)      SET n.node_id = n.substation_id;
+MATCH (n:Transformer)     SET n.node_id = n.asset_id;
+MATCH (n:SmartMeter)      SET n.node_id = n.meter_id;
