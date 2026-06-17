@@ -57,8 +57,7 @@ services:
       - ./neo4j/import:/import
     environment:
       NEO4J_PASSWORD: "${NEO4J_PASSWORD}"
-    command: >
-      bash -c "cypher-shell -a bolt://graph-db:7687 -u neo4j -p ${NEO4J_PASSWORD} -f /import/seed.cypher"
+    command: bash -c "cypher-shell -a bolt://graph-db:7687 -u neo4j -p ${NEO4J_PASSWORD} -f /import/seed.cypher"
     restart: on-failure
 
   catalog-db:
@@ -69,7 +68,8 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
-billing-db:
+
+  billing-db:
     image: postgres:15
     container_name: gridsense_postgres
     restart: unless-stopped
@@ -79,7 +79,7 @@ billing-db:
       - .env
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ./pg/init.sql:/docker-entrypoint-initdb.d/init.sql   
+      - ./pg/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   cache:
     image: redis:7-alpine
