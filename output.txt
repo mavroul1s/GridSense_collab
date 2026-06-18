@@ -39,37 +39,3 @@ Links             : {}
 ParsedHtml        : 
 RawContentLength  : 59
 
-
-
-PS C:\Users\nickb\Documents\GridSense_collab> docker logs gridsense_api --tail 30
-    async with self.lifespan_context(app) as maybe_state:
-  File "/usr/local/lib/python3.11/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/main.py", line 51, in lifespan
-    cassandra_db.connect()
-  File "/app/db/cassandra.py", line 60, in connect
-    _session = _cluster.connect("gridsense")  # keyspace from cql/init.cql
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "cassandra/cluster.py", line 1717, in cassandra.cluster.Cluster.connect
-  File "cassandra/cluster.py", line 1753, in cassandra.cluster.Cluster.connect
-  File "cassandra/cluster.py", line 1740, in cassandra.cluster.Cluster.connect
-  File "cassandra/cluster.py", line 3543, in cassandra.cluster.ControlConnection.connect
-  File "cassandra/cluster.py", line 3588, in cassandra.cluster.ControlConnection._reconnect_internal
-cassandra.cluster.NoHostAvailable: ('Unable to connect to any servers', {'172.18.0.4:9042': ConnectionRefusedError(111, "Tried connecting to [('172.18.0.4', 9042)]. Last error: Connection refused")})
-
-ERROR:    Application startup failed. Exiting.
-[GridSense] Starting up — connecting to all databases...
-INFO:     Started server process [1]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-[GridSense] Starting up — connecting to all databases...
-[Cassandra] Connected to gridsense keyspace on timeseries-db:9042
-[Neo4j] Connected to bolt://graph-db:7687
-[MongoDB] Connected to mongodb://catalog-db:27017 — database: gridsense
-[PostgreSQL] Pool connected to billing-db:5432 — database: gridsense
-[Redis] Connected to redis://cache:6379
-[GridSense] All databases connected — API ready.
-INFO:     172.18.0.1:59948 - "GET /health HTTP/1.1" 200 OK
-PS C:\Users\nickb\Documents\GridSense_collab> 

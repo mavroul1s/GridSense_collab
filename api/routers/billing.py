@@ -33,13 +33,19 @@ router = APIRouter(prefix="/billing", tags=["Billing"])
 # which NUMERIC(12,2) does not store anyway.
 
 def _decimal_to_float(row: dict | None) -> dict | None:
-    """Convert any Decimal values in an asyncpg row dict to float."""
+    """Convert Decimal values to float and parse JSONB string fields to dict."""
     if row is None:
         return None
-    return {
-        k: float(v) if isinstance(v, Decimal) else v
-        for k, v in row.items()
-    }
+
+    result = {}
+    for k, v in row.items():
+        if isinstance(v, Decimal):
+            result[k] = float(v)
+        elif k in ("tariff_info", "line_items") and isinstance(v, str):
+            result[k] = json.loads(v)
+        else:
+            result[k] = v
+    return result
 
 
 # ── GET /billing/account/{premise_id} ────────────────────────────
