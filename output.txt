@@ -1,128 +1,75 @@
-PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/sensors/SENSOR_001/readings
+PS C:\Users\nickb\Documents\GridSense_collab> docker compose up -d
+[+] up 8/8
+ ✔ Container gridsense_postgres                Running                                                                                                   0.0ss
+ ✔ Container gridsense_neo4j                   Healthy                                                                                                   45.2s
+ ✔ Container gridsense_redis                   Running                                                                                                   0.0ss
+ ✔ Container gridsense_cassandra               Healthy                                                                                                   23.8s
+ ✔ Container gridsense_mongo                   Running                                                                                                   0.0ss
+ ✔ Container gridsense_api                     Running                                                                                                   0.0ss
+ ✔ Container gridsense_collab-cassandra-init-1 Started                                                                                                   1.1s 
+ ✔ Container gridsense_collab-neo4j-init-1     Started                                                                                                   0.4s
+PS C:\Users\nickb\Documents\GridSense_collab> 
+PS C:\Users\nickb\Documents\GridSense_collab> docker compose ps
+NAME                            IMAGE                  COMMAND                  SERVICE         CREATED       STATUS                        PORTS
+gridsense_api                   gridsense_collab-api   "uvicorn main:app --…"   api             6 hours ago   Up 19 seconds                 0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+gridsense_cassandra             cassandra:4.1          "docker-entrypoint.s…"   timeseries-db   6 hours ago   Up About a minute (healthy)   0.0.0.0:9042->9042/tcp, [::]:9042->9042/tcp
+gridsense_collab-neo4j-init-1   neo4j:5-community      "tini -g -- /startup…"   neo4j-init      6 hours ago   Up 9 seconds                  7473-7474/tcp, 7687/tcp
+gridsense_mongo                 mongo:7                "docker-entrypoint.s…"   catalog-db      6 hours ago   Up About a minute             0.0.0.0:27017->27017/tcp, [::]:27017->27017/tcp
+gridsense_neo4j                 neo4j:5-community      "tini -g -- /startup…"   graph-db        6 hours ago   Up About a minute (healthy)   0.0.0.0:7474->7474/tcp, [::]:7474->7474/tcp, 0.0.0.0:7687->7687/tcp, [::]:7687->7687/tcp
+gridsense_postgres              postgres:15            "docker-entrypoint.s…"   billing-db      6 hours ago   Up About a minute             0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+gridsense_redis                 redis:7-alpine         "docker-entrypoint.s…"   cache           6 hours ago   Up About a minute             0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
+PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/health
 
 
 StatusCode        : 200
 StatusDescription : OK
-Content           : [{"sensor_id":"SENSOR_001","reading_time":"2026-03-22T01:37:29.431000","metric_type":"current","value":4.340000152587891,"unit":"A","qual
-                    ity_flag":0},{"sensor_id":"SENSOR_001","reading_time":"2026-03-...
+Content           : {"status":"ok","service":"gridsense-api","version":"1.0.0"}
 RawContent        : HTTP/1.1 200 OK
-                    Content-Length: 1529
+                    Content-Length: 59
                     Content-Type: application/json
-                    Date: Thu, 18 Jun 2026 08:14:12 GMT
+                    Date: Thu, 18 Jun 2026 12:11:00 GMT
                     Server: uvicorn
                     
-                    [{"sensor_id":"SENSOR_001","reading_time":"2026-03-22T01:37:29.431000","m...
+                    {"status":"ok","service":"gridsense-api","version":"1.0.0"}
 Forms             : 
-Headers           : {[Content-Length, 1529], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:14:12 GMT], [Server, uvicorn]}
-Images            : {}                                                                                                                                        
-InputFields       : {}                                                                                                                                        
-Links             : {}                                                                                                                                        
-ParsedHtml        :                                                                                                                                           
-RawContentLength  : 1529
-
-
-
-PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/sensors/SENSOR_001/summary
-
-
-StatusCode        : 200
-StatusDescription : OK
-Content           : {"sensor_id":"SENSOR_001","latest_values":{"current":4.340000152587891,"power_factor":0.8980000019073486,"temperature":48.097999572753906
-                    ,"voltage":227.79600524902344},"reading_count":100,"window_star...
-RawContent        : HTTP/1.1 200 OK
-                    Content-Length: 289
-                    Content-Type: application/json
-                    Date: Thu, 18 Jun 2026 08:14:22 GMT
-                    Server: uvicorn
-                    
-                    {"sensor_id":"SENSOR_001","latest_values":{"current":4.340000152587891,"po...
-Forms             : 
-Headers           : {[Content-Length, 289], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:14:22 GMT], [Server, uvicorn]}
-Images            : {}                                                                                                                                        
-InputFields       : {}                                                                                                                                        
-Links             : {}                                                                                                                                        
-ParsedHtml        :                                                                                                                                           
-RawContentLength  : 289
-
-
-
-PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing "http://localhost:8000/grid/fault-impact/SS_001"
-
-
-StatusCode        : 200
-StatusDescription : OK
-Content           : {"origin_node_id":"SS_001","origin_node_type":"Substation","max_depth_used":6,"affected_count":24,"affected_nodes":[{"node_type":"Transfo
-                    rmer","node_id":"TX_1","name":"TX_1","depth":1,"voltage_kV":nul...
-RawContent        : HTTP/1.1 200 OK
-                    Content-Length: 3818
-                    Content-Type: application/json
-                    Date: Thu, 18 Jun 2026 08:14:27 GMT
-                    Server: uvicorn
-                    
-                    {"origin_node_id":"SS_001","origin_node_type":"Substation","max_depth_use...
-Forms             : 
-Headers           : {[Content-Length, 3818], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:14:27 GMT], [Server, uvicorn]}
-Images            : {}                                                                                                                                        
-InputFields       : {}                                                                                                                                        
-Links             : {}                                                                                                                                        
-ParsedHtml        :                                                                                                                                           
-RawContentLength  : 3818
-
-
-
-PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/equipment/TX_1
-
-
-StatusCode        : 200
-StatusDescription : OK
-Content           : {"_id":"6a338ce64f9dad082c603caf","asset_id":"TX_1","cooling_type":"ONAF","equipment_type":"Transformer","extra_fields":{"oil_sample_date
-                    ":"2025-03-01","oil_acidity_mgKOH_g":0.049},"installed":"2017-0...
-RawContent        : HTTP/1.1 200 OK
-                    Content-Length: 502
-                    Content-Type: application/json
-                    Date: Thu, 18 Jun 2026 08:14:34 GMT
-                    Server: uvicorn
-                    
-                    {"_id":"6a338ce64f9dad082c603caf","asset_id":"TX_1","cooling_type":"ONAF",...
-Forms             : 
-Headers           : {[Content-Length, 502], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:14:34 GMT], [Server, uvicorn]}
+Headers           : {[Content-Length, 59], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 12:11:00 GMT], [Server, uvicorn]}
 Images            : {}
 InputFields       : {}
 Links             : {}
 ParsedHtml        : 
-RawContentLength  : 502
-
-
-                                                                                                                                                              
-PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/billing/account/PREM_1                                              
-curl : Internal Server Error                                                                                                                                  
-At line:1 char:1                                                                                                                                              
-+ curl -UseBasicParsing http://localhost:8000/billing/account/PREM_1
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:HttpWebRequest) [Invoke-WebRequest], WebException
-    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShell.Commands.InvokeWebRequestCommand
-PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/alerts/active
-
-
-StatusCode        : 200
-StatusDescription : OK
-Content           : {"count":5,"alerts":[{"event_id":"0137b224-6aed-11f1-a9e0-46d820f5f36b","feeder_id":"F_005","relay_id":"RELAY_005","event_type":"TRIP","f
-                    ault_type":"DISTANCE","current_kA":2.7,"resolved":true,"timesta...
-RawContent        : HTTP/1.1 200 OK
-                    Content-Length: 1131
-                    Content-Type: application/json
-                    Date: Thu, 18 Jun 2026 08:15:06 GMT
-                    Server: uvicorn
-                    
-                    {"count":5,"alerts":[{"event_id":"0137b224-6aed-11f1-a9e0-46d820f5f36b","...
-Forms             : 
-Headers           : {[Content-Length, 1131], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:15:06 GMT], [Server, uvicorn]}
-Images            : {}
-InputFields       : {}
-Links             : {}
-ParsedHtml        : 
-RawContentLength  : 1131
+RawContentLength  : 59
 
 
 
+PS C:\Users\nickb\Documents\GridSense_collab> docker logs gridsense_api --tail 30
+    async with self.lifespan_context(app) as maybe_state:
+  File "/usr/local/lib/python3.11/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/main.py", line 51, in lifespan
+    cassandra_db.connect()
+  File "/app/db/cassandra.py", line 60, in connect
+    _session = _cluster.connect("gridsense")  # keyspace from cql/init.cql
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "cassandra/cluster.py", line 1717, in cassandra.cluster.Cluster.connect
+  File "cassandra/cluster.py", line 1753, in cassandra.cluster.Cluster.connect
+  File "cassandra/cluster.py", line 1740, in cassandra.cluster.Cluster.connect
+  File "cassandra/cluster.py", line 3543, in cassandra.cluster.ControlConnection.connect
+  File "cassandra/cluster.py", line 3588, in cassandra.cluster.ControlConnection._reconnect_internal
+cassandra.cluster.NoHostAvailable: ('Unable to connect to any servers', {'172.18.0.4:9042': ConnectionRefusedError(111, "Tried connecting to [('172.18.0.4', 9042)]. Last error: Connection refused")})
+
+ERROR:    Application startup failed. Exiting.
+[GridSense] Starting up — connecting to all databases...
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[GridSense] Starting up — connecting to all databases...
+[Cassandra] Connected to gridsense keyspace on timeseries-db:9042
+[Neo4j] Connected to bolt://graph-db:7687
+[MongoDB] Connected to mongodb://catalog-db:27017 — database: gridsense
+[PostgreSQL] Pool connected to billing-db:5432 — database: gridsense
+[Redis] Connected to redis://cache:6379
+[GridSense] All databases connected — API ready.
+INFO:     172.18.0.1:59948 - "GET /health HTTP/1.1" 200 OK
 PS C:\Users\nickb\Documents\GridSense_collab> 
