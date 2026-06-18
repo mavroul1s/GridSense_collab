@@ -1,0 +1,128 @@
+PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/sensors/SENSOR_001/readings
+
+
+StatusCode        : 200
+StatusDescription : OK
+Content           : [{"sensor_id":"SENSOR_001","reading_time":"2026-03-22T01:37:29.431000","metric_type":"current","value":4.340000152587891,"unit":"A","qual
+                    ity_flag":0},{"sensor_id":"SENSOR_001","reading_time":"2026-03-...
+RawContent        : HTTP/1.1 200 OK
+                    Content-Length: 1529
+                    Content-Type: application/json
+                    Date: Thu, 18 Jun 2026 08:14:12 GMT
+                    Server: uvicorn
+                    
+                    [{"sensor_id":"SENSOR_001","reading_time":"2026-03-22T01:37:29.431000","m...
+Forms             : 
+Headers           : {[Content-Length, 1529], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:14:12 GMT], [Server, uvicorn]}
+Images            : {}                                                                                                                                        
+InputFields       : {}                                                                                                                                        
+Links             : {}                                                                                                                                        
+ParsedHtml        :                                                                                                                                           
+RawContentLength  : 1529
+
+
+
+PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/sensors/SENSOR_001/summary
+
+
+StatusCode        : 200
+StatusDescription : OK
+Content           : {"sensor_id":"SENSOR_001","latest_values":{"current":4.340000152587891,"power_factor":0.8980000019073486,"temperature":48.097999572753906
+                    ,"voltage":227.79600524902344},"reading_count":100,"window_star...
+RawContent        : HTTP/1.1 200 OK
+                    Content-Length: 289
+                    Content-Type: application/json
+                    Date: Thu, 18 Jun 2026 08:14:22 GMT
+                    Server: uvicorn
+                    
+                    {"sensor_id":"SENSOR_001","latest_values":{"current":4.340000152587891,"po...
+Forms             : 
+Headers           : {[Content-Length, 289], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:14:22 GMT], [Server, uvicorn]}
+Images            : {}                                                                                                                                        
+InputFields       : {}                                                                                                                                        
+Links             : {}                                                                                                                                        
+ParsedHtml        :                                                                                                                                           
+RawContentLength  : 289
+
+
+
+PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing "http://localhost:8000/grid/fault-impact/SS_001"
+
+
+StatusCode        : 200
+StatusDescription : OK
+Content           : {"origin_node_id":"SS_001","origin_node_type":"Substation","max_depth_used":6,"affected_count":24,"affected_nodes":[{"node_type":"Transfo
+                    rmer","node_id":"TX_1","name":"TX_1","depth":1,"voltage_kV":nul...
+RawContent        : HTTP/1.1 200 OK
+                    Content-Length: 3818
+                    Content-Type: application/json
+                    Date: Thu, 18 Jun 2026 08:14:27 GMT
+                    Server: uvicorn
+                    
+                    {"origin_node_id":"SS_001","origin_node_type":"Substation","max_depth_use...
+Forms             : 
+Headers           : {[Content-Length, 3818], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:14:27 GMT], [Server, uvicorn]}
+Images            : {}                                                                                                                                        
+InputFields       : {}                                                                                                                                        
+Links             : {}                                                                                                                                        
+ParsedHtml        :                                                                                                                                           
+RawContentLength  : 3818
+
+
+
+PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/equipment/TX_1
+
+
+StatusCode        : 200
+StatusDescription : OK
+Content           : {"_id":"6a338ce64f9dad082c603caf","asset_id":"TX_1","cooling_type":"ONAF","equipment_type":"Transformer","extra_fields":{"oil_sample_date
+                    ":"2025-03-01","oil_acidity_mgKOH_g":0.049},"installed":"2017-0...
+RawContent        : HTTP/1.1 200 OK
+                    Content-Length: 502
+                    Content-Type: application/json
+                    Date: Thu, 18 Jun 2026 08:14:34 GMT
+                    Server: uvicorn
+                    
+                    {"_id":"6a338ce64f9dad082c603caf","asset_id":"TX_1","cooling_type":"ONAF",...
+Forms             : 
+Headers           : {[Content-Length, 502], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:14:34 GMT], [Server, uvicorn]}
+Images            : {}
+InputFields       : {}
+Links             : {}
+ParsedHtml        : 
+RawContentLength  : 502
+
+
+                                                                                                                                                              
+PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/billing/account/PREM_1                                              
+curl : Internal Server Error                                                                                                                                  
+At line:1 char:1                                                                                                                                              
++ curl -UseBasicParsing http://localhost:8000/billing/account/PREM_1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:HttpWebRequest) [Invoke-WebRequest], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShell.Commands.InvokeWebRequestCommand
+PS C:\Users\nickb\Documents\GridSense_collab> curl -UseBasicParsing http://localhost:8000/alerts/active
+
+
+StatusCode        : 200
+StatusDescription : OK
+Content           : {"count":5,"alerts":[{"event_id":"0137b224-6aed-11f1-a9e0-46d820f5f36b","feeder_id":"F_005","relay_id":"RELAY_005","event_type":"TRIP","f
+                    ault_type":"DISTANCE","current_kA":2.7,"resolved":true,"timesta...
+RawContent        : HTTP/1.1 200 OK
+                    Content-Length: 1131
+                    Content-Type: application/json
+                    Date: Thu, 18 Jun 2026 08:15:06 GMT
+                    Server: uvicorn
+                    
+                    {"count":5,"alerts":[{"event_id":"0137b224-6aed-11f1-a9e0-46d820f5f36b","...
+Forms             : 
+Headers           : {[Content-Length, 1131], [Content-Type, application/json], [Date, Thu, 18 Jun 2026 08:15:06 GMT], [Server, uvicorn]}
+Images            : {}
+InputFields       : {}
+Links             : {}
+ParsedHtml        : 
+RawContentLength  : 1131
+
+
+
+PS C:\Users\nickb\Documents\GridSense_collab> 

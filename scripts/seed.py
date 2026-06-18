@@ -38,7 +38,7 @@ from db.neo4j     import run_query, run_write
 from db.mongo     import equipment_collection
 from db.postgres  import execute, fetch_one, execute_transaction
 from db.redis     import push_alert_to_buffer, publish_alert
-
+from datetime import datetime, timezone, timedelta, date
 
 # ─────────────────────────────────────────────────────────────────
 # CASSANDRA — 50,000 readings across 20 sensors
@@ -345,16 +345,16 @@ async def seed_postgres():
         ])
 
         await execute(
-            """
-            INSERT INTO invoices
-                (premise_id, period_start, period_end,
-                 consumption_kwh, amount_due, line_items, status)
-            VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'issued')
-            ON CONFLICT (premise_id, period_start, period_end) DO NOTHING
-            """,
-            premise_id,
-            "2026-05-01",
-            "2026-05-31",
+    """
+    INSERT INTO invoices
+        (premise_id, period_start, period_end,
+         consumption_kwh, amount_due, line_items, status)
+    VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'issued')
+    ON CONFLICT (premise_id, period_start, period_end) DO NOTHING
+    """,
+    premise_id,
+    date(2026, 5, 1),
+    date(2026, 5, 31),
             consumption,
             amount_due,
             line_items,

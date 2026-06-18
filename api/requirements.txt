@@ -18,7 +18,7 @@ pydantic==2.7.1
 # ── MONGODB DRIVER ────────────────────────────────────────────────
 #  Motor is the async MongoDB driver
 # AsyncIOMotorClient — used in Week 5 lab exactly
-motor==3.4.0
+motor==3.6.0
 
 
 # ── CASSANDRA DRIVER ──────────────────────────────────────────────
