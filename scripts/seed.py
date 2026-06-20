@@ -68,7 +68,7 @@ async def seed_cassandra():
     print("\n[Cassandra] Seeding 50,000 sensor readings...")
 
     # Base timestamp: 90 days ago, stepping forward by 1 minute per reading
-    base_time = datetime.now(timezone.utc) - timedelta(days=90)
+    base_time = datetime(2026, 3, 1, tzinfo=timezone.utc)  # fixed, not datetime.now()
     readings_per_sensor = 2500   # 2500 timestamps × 4 metrics × 20 sensors = 200,000 writes
                                   # but 2500 × 20 = 50,000 unique timestamp+sensor combos
 
@@ -397,12 +397,14 @@ async def verify_neo4j():
 # ─────────────────────────────────────────────────────────────────
 # REDIS — push 5 test alerts to the rolling buffer
 # ─────────────────────────────────────────────────────────────────
+
 async def seed_redis():
     print("\n[Redis] Pushing 5 test alerts to buffer...")
-
+    r = redis_db.get_redis()
+    await r.delete("gridsense:alerts:recent")
     test_alerts = [
         {
-            "event_id":   str(uuid.uuid1()),
+            "event_id":   "SEED_ALERT_001",
             "feeder_id":  "F_001",
             "relay_id":   "RELAY_001",
             "event_type": "TRIP",
@@ -412,7 +414,7 @@ async def seed_redis():
             "timestamp":  datetime.now(timezone.utc).isoformat(),
         },
         {
-            "event_id":   str(uuid.uuid1()),
+            "event_id":   "SEED_ALERT_002",
             "feeder_id":  "F_002",
             "relay_id":   "RELAY_002",
             "event_type": "ALARM",
@@ -422,7 +424,7 @@ async def seed_redis():
             "timestamp":  datetime.now(timezone.utc).isoformat(),
         },
         {
-            "event_id":   str(uuid.uuid1()),
+            "event_id":   "SEED_ALERT_003",
             "feeder_id":  "F_003",
             "relay_id":   "RELAY_003",
             "event_type": "RECLOSE",
@@ -432,7 +434,7 @@ async def seed_redis():
             "timestamp":  datetime.now(timezone.utc).isoformat(),
         },
         {
-            "event_id":   str(uuid.uuid1()),
+            "event_id":   "SEED_ALERT_004",
             "feeder_id":  "F_004",
             "relay_id":   "RELAY_004",
             "event_type": "LOCKOUT",
@@ -442,7 +444,7 @@ async def seed_redis():
             "timestamp":  datetime.now(timezone.utc).isoformat(),
         },
         {
-            "event_id":   str(uuid.uuid1()),
+            "event_id":   "SEED_ALERT_005",
             "feeder_id":  "F_005",
             "relay_id":   "RELAY_005",
             "event_type": "TRIP",
