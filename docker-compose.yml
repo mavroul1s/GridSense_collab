@@ -103,12 +103,37 @@ services:
         condition: service_healthy
       graph-db:
         condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+      neo4j-init:
+        condition: service_completed_successfully
       catalog-db:
         condition: service_started
       billing-db:
         condition: service_started
       cache:
         condition: service_started
+
+  seed:
+    build: ./api
+    container_name: gridsense_seed
+    depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
+      neo4j-init:
+        condition: service_completed_successfully
+      catalog-db:
+        condition: service_started
+      billing-db:
+        condition: service_started
+      cache:
+        condition: service_started
+    env_file:
+      - .env
+    volumes:
+      - ./scripts:/app/scripts
+    command: ["python", "scripts/seed.py"]
+    restart: "no"
 
 volumes:
   cassandra_data:
