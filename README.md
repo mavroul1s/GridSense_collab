@@ -17,7 +17,7 @@ Full reasoning for each technology choice is documented in `PART_A_ANSWERS.md`.
 ## Project Structure
 gridsense/
 
-├── docker-compose.yml       # 8 services: 5 DBs + 2 init containers + API
+├── docker-compose.yml       # 9 containers: 5 DBs + 2 init containers + API + seed
 
 ├── cql/init.cql              # Cassandra schema (executed by cassandra-init)
 
@@ -25,7 +25,7 @@ gridsense/
 
 ├── pg/init.sql                # PostgreSQL schema (auto-run by postgres entrypoint)
 
-├── scripts/seed.py            # Populates all 5 databases with test data
+├── scripts/seed.py            # Seeds Cassandra, MongoDB, PostgreSQL, Redis (run automatically by the seed container)
 
 └── api/
 
@@ -49,7 +49,22 @@ Prerequisites: Docker Desktop, a `.env` file at the repo root (see `.env.example
 docker compose up --build
 ```
 
-Wait ~90 seconds for Cassandra to reach healthy status before the API becomes available. Verify with:
+This single command boots all 9 containers and fully seeds the system — no manual steps required. Startup order is:
+
+1. `timeseries-db` and `graph-db` start and report healthy
+2. `cassandra-init` runs `cql/init.cql` via `cqlsh`, then exits
+3. `neo4j-init` runs `neo4j/import/seed.cypher` via `cypher-shell`, then exits
+4. `catalog-db`, `billing-db`, `cache` start (PostgreSQL auto-runs `pg/init.sql` via the standard `docker-entrypoint-initdb.d` convention)
+5. `api` starts once both init containers have completed successfully
+6. `seed` runs `scripts/seed.py` against the now-ready stack, then exits
+
+Cassandra seeding writes 200,000 readings sequentially, so the `seed` container can take several minutes to complete on first run. Watch its progress with:
+
+```bash
+docker compose logs -f seed
+```
+
+Verify the API is up:
 
 ```bash
 curl http://localhost:8000/health
@@ -59,19 +74,19 @@ Interactive API documentation: **http://localhost:8000/docs**
 
 ## Seeding Test Data
 
-```bash
-docker cp scripts/seed.py gridsense_api:/app/scripts/seed.py
-docker exec -it gridsense_api python scripts/seed.py
-```
+Seeding is fully automatic — `scripts/seed.py` runs once via the dedicated `seed` service as part of `docker compose up --build`. It populates:
 
-This populates:
-- **Cassandra**: 50,000 readings × 4 metric types across 20 sensors (200,000 total writes across 2 tables)
+- **Cassandra**: 200,000 sensor readings (2,500 timestamps × 4 metric types × 20 sensors), written to both `sensor_readings` and `sensor_readings_by_time` — 400,000 total `INSERT` operations across the two tables
 - **MongoDB**: 30 equipment records across 3 schema shapes (Transformer, SmartMeter, ProtectionRelay)
 - **PostgreSQL**: 100 consumer accounts + 100 invoices
-- **Neo4j**: 2 GridSupplyPoints, 10 Substations, 40 Transformers, 200 SmartMeters (seeded automatically at startup via `neo4j-init`)
+- **Neo4j**: 2 GridSupplyPoints, 10 Substations, 40 Transformers, 200 SmartMeters (seeded independently and earlier in the startup sequence, by `neo4j-init`; `seed.py` verifies the counts rather than writing this data itself)
 - **Redis**: 5 test alerts pushed to the rolling buffer
 
-The seed script is idempotent — re-running it does not create duplicates.
+The seed script is idempotent — re-running it does not create duplicates. To re-run it manually against an already-running stack (e.g. after manually clearing a database):
+
+```bash
+docker compose run --rm seed
+```
 
 ## API Endpoints
 
@@ -194,6 +209,7 @@ A full list of intentional traps identified in the assignment's starter material
 - Cypher does not allow query parameters as variable-length path bounds (`*1..$depth` is invalid); the bound is validated server-side (1–10) and interpolated as an f-string.
 - The `sensor_readings` clustering key includes `metric_type` to prevent Last-Write-Wins data loss when multiple metrics arrive at the same timestamp.
 - All inter-container connections use Docker Compose service names (`timeseries-db`, `graph-db`, `catalog-db`, `billing-db`, `cache`), never `localhost`.
+- Test-data seeding is fully automated via a dedicated `seed` service rather than a manual `docker exec` step, so `docker compose up --build` alone produces a fully populated, ready-to-test system.
 
 ## AI Use Disclosure
 
