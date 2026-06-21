@@ -171,7 +171,7 @@ async def restore_paths(node_id: str):
     for row in rows:
         path_nodes = [
             RestorePathNodeOut(
-                node_id="origin",  # placeholder — origin is the starting point
+                node_id=row["origin_id"],  # placeholder — origin is the starting point
                 node_type="Substation",
                 name=row["origin_name"],
             ),
