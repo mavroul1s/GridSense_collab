@@ -25,7 +25,7 @@ from db.redis import cache_delete
 
 SENSOR_ID  = "SENSOR_001"
 CACHE_KEY  = f"summary:{SENSOR_ID}"
-BASE_URL   = "http://localhost:8000"
+BASE_URL   = "http://api:8000"
 N_REQUESTS = 1000
 
 
