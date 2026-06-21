@@ -30,7 +30,7 @@ EquipmentIn = Union[TransformerIn, SmartMeterIn, ProtectionRelayIn]
 
 
 # ── POST /equipment ───────────────────────────────────────────────
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 async def create_equipment(item: EquipmentIn = Body(...)):
     """
     Insert a new equipment record into the catalog.
