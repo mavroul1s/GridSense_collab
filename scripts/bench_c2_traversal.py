@@ -17,8 +17,12 @@ import time
 import statistics
 from neo4j import GraphDatabase
 
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 URI  = "bolt://graph-db:7687"
-AUTH = ("neo4j", "gridsense_neo4j_secret")  # matches .env NEO4J_PASSWORD
+AUTH = ("neo4j", os.getenv("NEO4J_PASSWORD"))
 
 ORIGIN_NODE_ID = "SS_001"   # Substation with known downstream topology
 N_ITERATIONS   = 30
