@@ -90,7 +90,7 @@ docker compose run --rm seed
 
 ## API Endpoints
 
-14 endpoints across 5 routers:
+14 mandatory endpoints across 5 routers, plus 2 bonus endpoints demonstrating additional patterns from Part A:
 
 | Method | Path | Backend |
 |---|---|---|
@@ -108,6 +108,8 @@ docker compose run --rm seed
 | POST | `/billing/invoice` | PostgreSQL |
 | GET | `/alerts/active` | Redis |
 | POST | `/alerts/publish` | Cassandra + Redis |
+| GET | `/billing/accounts/tariff?tariff_class=...` *(bonus)* | PostgreSQL |
+| GET | `/alerts/transformer/{asset_id}/status` *(bonus)* | Redis |
 
 ## Example API Calls
 
