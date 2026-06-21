@@ -205,6 +205,8 @@ curl http://localhost:8000/billing/account/PREM_1
 
 ## Known Design Constraints
 
+- `POST /equipment` was originally declared with route path `"/"` rather than `""`, which combined with the router's `prefix="/equipment"` produced the real path `/equipment/` instead of `/equipment` — a 307 redirect on the path specified in the assignment's endpoint table. Found via direct `curl` testing of all write endpoints (curl does not auto-follow redirects), fixed, and re-verified to return `201 Created` on the correct path.
+
 A full list of intentional traps identified in the assignment's starter materials — and the corrected approach taken instead — is documented in `GRIDSENSE_TRAP_ANALYSIS.md`. Summary of the most significant:
 
 - Cassandra and Neo4j do not support `docker-entrypoint-initdb.d`-style auto-initialization; dedicated `cassandra-init` and `neo4j-init` containers execute schema/seed files via `cqlsh` and `cypher-shell` respectively after a healthcheck confirms the database is ready.
