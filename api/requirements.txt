@@ -1,0 +1,51 @@
+# api/requirements.txt
+# GridSense API dependencies
+# Every package maps to a specific slide reference — nothing extra
+
+
+# ── WEB FRAMEWORK ─────────────────────────────────────────────────
+#  uvicorn is the server, fastapi is the framework
+fastapi==0.111.0
+uvicorn==0.29.0
+
+
+# ── DATA VALIDATION ───────────────────────────────────────────────
+# Pydantic BaseModel validates incoming JSON
+# model_dump() serialises to dict for database writes
+pydantic==2.7.1
+
+
+# ── MONGODB DRIVER ────────────────────────────────────────────────
+#  Motor is the async MongoDB driver
+# AsyncIOMotorClient — used in Week 5 lab exactly
+motor==3.6.0
+
+
+# ── CASSANDRA DRIVER ──────────────────────────────────────────────
+#official DataStax Python driver
+# Provides Cluster, Session, and async execution
+cassandra-driver==3.29.1
+
+
+# ── POSTGRESQL DRIVER ─────────────────────────────────────────────
+#  asyncpg for async PostgreSQL
+# Required for non-blocking JSONB reads and billing transactions
+asyncpg==0.29.0
+
+
+# ── REDIS DRIVER ──────────────────────────────────────────────────
+#  redis-py with async support
+# Used for cache-aside pattern (SETEX, GET) and Pub/Sub alerts
+redis==5.0.4
+
+
+# ── NEO4J DRIVER ──────────────────────────────────────────────────
+# Official Neo4j Python driver — async session support
+# Used for graph traversal endpoints (fault-impact, restore-paths)
+neo4j==5.20.0
+
+
+# ── ENVIRONMENT VARIABLES ─────────────────────────────────────────
+#  loads .env file into os.environ at startup
+# Keeps credentials out of code and docker-compose.yml
+python-dotenv==1.0.1
