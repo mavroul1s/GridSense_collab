@@ -1,15 +1,6 @@
-# scripts/seed.py
-# GridSense — seed all 5 databases with test data
-#
-# Run from repo root after stack is up:
-#   docker exec -it gridsense_api python scripts/seed.py
-#
-# IDEMPOTENT: running twice produces no duplicates
-# Cassandra: 50,000 readings across 20 sensor IDs
-# MongoDB:   30 equipment records (3 schema shapes)
-# PostgreSQL: 100 consumer accounts + 1 invoice per account
-# Neo4j:     verified only — seeded by neo4j-init container
-# Redis:     5 test alerts pushed to buffer
+# Seed all 5 databases with test data. Idempotent — re-running creates no duplicates.
+# Cassandra readings, MongoDB equipment, PostgreSQL accounts/invoices, Redis alerts;
+# Neo4j is seeded by neo4j-init and only verified here.
 
 import asyncio
 import json
@@ -19,13 +10,11 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
-# ── Load environment ──────────────────────────────────────────────
 from dotenv import load_dotenv
 load_dotenv()
 
-# ── DB modules ────────────────────────────────────────────────────
 import sys
-sys.path.insert(0, "/app")   # inside the api container WORKDIR
+sys.path.insert(0, "/app")   # api container WORKDIR
 
 import db.cassandra  as cassandra_db
 import db.neo4j      as neo4j_db
@@ -40,11 +29,7 @@ from db.postgres  import execute, fetch_one, execute_transaction
 from db.redis     import push_alert_to_buffer, publish_alert
 from datetime import datetime, timezone, timedelta, date
 
-# ─────────────────────────────────────────────────────────────────
-# CASSANDRA — 50,000 readings across 20 sensors
-# 2,500 readings per sensor × 4 metric types = 10,000 writes per sensor
-# Written to BOTH tables (sensor_readings + sensor_readings_by_time)
-# ─────────────────────────────────────────────────────────────────
+# ── Cassandra: 20 sensors × 2500 timestamps × 4 metrics, written to both tables ──
 SENSOR_IDS   = [f"SENSOR_{i:03d}" for i in range(1, 21)]   # SENSOR_001 … SENSOR_020
 METRIC_TYPES = ["voltage", "current", "power_factor", "temperature"]
 
@@ -65,12 +50,11 @@ METRIC_UNITS = {
 
 
 async def seed_cassandra():
-    print("\n[Cassandra] Seeding 50,000 sensor readings...")
+    print("\n[Cassandra] Seeding sensor readings...")
 
-    # Base timestamp: 90 days ago, stepping forward by 1 minute per reading
-    base_time = datetime(2026, 3, 1, tzinfo=timezone.utc)  # fixed, not datetime.now()
-    readings_per_sensor = 2500   # 2500 timestamps × 4 metrics × 20 sensors = 200,000 writes
-                                  # but 2500 × 20 = 50,000 unique timestamp+sensor combos
+    # Fixed base time (not now()) so re-runs overwrite the same rows — keeps it idempotent.
+    base_time = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    readings_per_sensor = 2500   # × 4 metrics × 20 sensors = 200,000 rows per table
 
     total = 0
 
@@ -84,7 +68,6 @@ async def seed_cassandra():
                 value  = round(random.uniform(lo, hi), 3)
                 unit   = METRIC_UNITS[metric_type]
 
-                # Write 1: sensor_readings (per-sensor query pattern)
                 await execute_async(
                     """
                     INSERT INTO sensor_readings
@@ -94,7 +77,6 @@ async def seed_cassandra():
                     (sensor_id, reading_time, metric_type, value, unit, 0)
                 )
 
-                # Write 2: sensor_readings_by_time (dashboard query pattern)
                 await execute_async(
                     """
                     INSERT INTO sensor_readings_by_time
@@ -111,13 +93,7 @@ async def seed_cassandra():
     print(f"[Cassandra] Done — {total:,} total writes across 2 tables")
 
 
-# ─────────────────────────────────────────────────────────────────
-# MONGODB — 30 equipment records (3 schema shapes × 10 each)
-# Shape 1: Transformer       (TX_1  … TX_10)
-# Shape 2: SmartMeter        (SM_1  … SM_10)
-# Shape 3: ProtectionRelay   (RELAY_1 … RELAY_10)
-# IDEMPOTENT: upsert on asset_id
-# ─────────────────────────────────────────────────────────────────
+# ── MongoDB: 30 equipment records (10 each of 3 shapes), upsert on asset_id ──
 TRANSFORMER_MODELS  = ["TrafoBloc-250", "GEAFOL-160", "Minera-400", "Prolec-100", "TrafoBloc-630"]
 METER_MODELS        = ["E360", "E650", "DLMS-Pro", "SmartOne-3P", "NetZero-II"]
 RELAY_MODELS        = ["SEL-351S", "ABB-REF615", "Siemens-7SJ85", "GE-D60", "Schneider-P14N"]
@@ -129,7 +105,7 @@ async def seed_mongo():
     col = equipment_collection()
     count = 0
 
-    # ── Shape 1: Transformers ─────────────────────────────────────
+    # Transformers
     for i in range(1, 11):
         asset_id = f"TX_{i}"
         doc = {
@@ -164,7 +140,7 @@ async def seed_mongo():
 
     print(f"  Transformers: 10 records")
 
-    # ── Shape 2: SmartMeters ──────────────────────────────────────
+    # SmartMeters
     for i in range(1, 11):
         asset_id = f"METER_{i}"
         doc = {
@@ -201,7 +177,7 @@ async def seed_mongo():
 
     print(f"  SmartMeters: 10 records")
 
-    # ── Shape 3: ProtectionRelays ─────────────────────────────────
+    # ProtectionRelays
     feeders = [f"F_{i:03d}" for i in range(1, 11)]
     for i in range(1, 11):
         asset_id = f"RELAY_{i:03d}"
@@ -239,11 +215,8 @@ async def seed_mongo():
     print(f"[MongoDB] Done — {count} equipment records")
 
 
-# ─────────────────────────────────────────────────────────────────
-# POSTGRESQL — 100 consumer accounts + 1 invoice per account
-# 3 tariff classes: residential (60), commercial (30), industrial (10)
-# IDEMPOTENT: INSERT ... ON CONFLICT DO NOTHING
-# ─────────────────────────────────────────────────────────────────
+# ── PostgreSQL: 100 accounts (60 residential / 30 commercial / 10 industrial) ──
+# + 1 invoice each. Idempotent via ON CONFLICT DO NOTHING.
 GREEK_NAMES = [
     "Maria Papadopoulou", "Nikos Georgiou", "Anna Stavridou",
     "Kostas Alexiou", "Eleni Konstantinou", "Dimitris Nikolaou",
@@ -273,7 +246,6 @@ async def seed_postgres():
         name       = GREEK_NAMES[i % len(GREEK_NAMES)]
         address    = f"{random.choice(ADDRESSES)}, Unit {i}"
 
-        # Tariff class distribution: 60 residential, 30 commercial, 10 industrial
         if i <= 60:
             tariff_info = {
                 "tariff_class":    "residential",
@@ -303,7 +275,6 @@ async def seed_postgres():
 
         balance = round(random.uniform(-50.0, 200.0), 2)
 
-        # INSERT account — skip if already exists (idempotent)
         await execute(
             """
             INSERT INTO consumer_accounts
@@ -319,7 +290,7 @@ async def seed_postgres():
         )
         accounts_inserted += 1
 
-        # INSERT one invoice per account for May 2026
+        # One May-2026 invoice per account.
         consumption = round(random.uniform(50.0, 800.0), 3)
         rate        = tariff_info["rate_per_kwh"]
         standing    = tariff_info["standing_charge"]
@@ -364,9 +335,7 @@ async def seed_postgres():
     print(f"[PostgreSQL] Done — {accounts_inserted} accounts, {invoices_inserted} invoices")
 
 
-# ─────────────────────────────────────────────────────────────────
-# NEO4J — verify seed was applied by cassandra-init container
-# ─────────────────────────────────────────────────────────────────
+# ── Neo4j: verify the neo4j-init container applied the seed ──────
 async def verify_neo4j():
     print("\n[Neo4j] Verifying seed data...")
 
@@ -394,9 +363,7 @@ async def verify_neo4j():
         print("[Neo4j] WARNING — no data found, neo4j-init may not have run yet")
 
 
-# ─────────────────────────────────────────────────────────────────
-# REDIS — push 5 test alerts to the rolling buffer
-# ─────────────────────────────────────────────────────────────────
+# ── Redis: push 5 test alerts to the rolling buffer ──────────────
 
 async def seed_redis():
     print("\n[Redis] Pushing 5 test alerts to buffer...")
@@ -462,15 +429,11 @@ async def seed_redis():
     print(f"[Redis] Done — 5 alerts in buffer")
 
 
-# ─────────────────────────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────────────────────────
 async def main():
     print("=" * 60)
     print("GridSense Seed Script")
     print("=" * 60)
 
-    # Connect all databases
     print("\nConnecting to databases...")
     cassandra_db.connect()
     await neo4j_db.connect()
@@ -486,7 +449,6 @@ async def main():
         await verify_neo4j()
         await seed_redis()
     finally:
-        # Always disconnect cleanly
         cassandra_db.disconnect()
         await neo4j_db.disconnect()
         await mongo_db.disconnect()

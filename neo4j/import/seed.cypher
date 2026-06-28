@@ -1,14 +1,8 @@
-// ================================================================
-// GridSense — Neo4j Seed
-// 2 GSPs → 10 Substations → 40 Transformers → 200 SmartMeters
-// IDEMPOTENT: all writes use MERGE, never CREATE (Trap 8 fix)
-// Running this file twice produces zero duplicates
-// ================================================================
+// GridSense Neo4j seed: 2 GSPs → 10 Substations → 40 Transformers → 200 SmartMeters.
+// Idempotent — all writes use MERGE, so re-running produces no duplicates.
 
 
-// ── CONSTRAINTS ─────────────────────────────────────────────────
-// Neo4j 5 syntax. Creates unique index on each ID field.
-// MERGE depends on these to detect existing nodes efficiently.
+// ── Constraints (unique index per ID, used by MERGE) ─────────────
 
 CREATE CONSTRAINT gsp_id_unique IF NOT EXISTS
 FOR (n:GridSupplyPoint) REQUIRE n.gsp_id IS UNIQUE;
@@ -23,7 +17,7 @@ CREATE CONSTRAINT smartmeter_meter_id_unique IF NOT EXISTS
 FOR (n:SmartMeter) REQUIRE n.meter_id IS UNIQUE;
 
 
-// ── GRID SUPPLY POINTS (2) ───────────────────────────────────────
+// ── Grid Supply Points (2) ───────────────────────────────────────
 
 MERGE (g:GridSupplyPoint {gsp_id: 'GSP_NORTH'})
 ON CREATE SET g.name       = 'Northern Grid Supply Point',
@@ -36,9 +30,7 @@ ON CREATE SET g.name       = 'Southern Grid Supply Point',
               g.region     = 'South';
 
 
-// ── SUBSTATIONS (10) ─────────────────────────────────────────────
-// SS_001–SS_005 will be fed by GSP_NORTH
-// SS_006–SS_010 will be fed by GSP_SOUTH
+// ── Substations (10): SS_001–005 fed by NORTH, SS_006–010 by SOUTH ──
 
 UNWIND [
   {id:'SS_001', name:'Northgate Primary',  voltage_kV:11, lat:51.52, lon:-1.21, year:2005},
@@ -60,17 +52,7 @@ ON CREATE SET s.name              = props.name,
               s.commissioned_year = props.year;
 
 
-// ── TRANSFORMERS (40, 4 per substation) ──────────────────────────
-// TX_1–TX_4   → SS_001
-// TX_5–TX_8   → SS_002
-// TX_9–TX_12  → SS_003
-// TX_13–TX_16 → SS_004
-// TX_17–TX_20 → SS_005
-// TX_21–TX_24 → SS_006
-// TX_25–TX_28 → SS_007
-// TX_29–TX_32 → SS_008
-// TX_33–TX_36 → SS_009
-// TX_37–TX_40 → SS_010
+// ── Transformers (40, 4 per substation: TX_1–4 → SS_001, etc.) ───
 
 UNWIND [
   {id:'TX_1',  rating:250, mfr:'ABB',               model:'TrafoBloc-250', inst:'2018-03-15', insp:'2024-01-10'},
@@ -122,12 +104,8 @@ ON CREATE SET t.rating_kVA      = props.rating,
               t.last_inspection = props.insp;
 
 
-// ── SMART METERS (200, 5 per transformer) ────────────────────────
-// range(1,200) avoids writing 200 explicit MERGE blocks — no APOC required.
-// meter_id : SM_1 through SM_200
-// premise_id: PREM_1 through PREM_200
-// tariff_class: SM_1–120 residential | 121–180 commercial | 181–200 industrial
-// phase: n % 3 = 0 → three-phase, else single
+// ── Smart Meters (200, 5 per transformer) ────────────────────────
+// tariff_class: 1–120 residential | 121–180 commercial | 181–200 industrial.
 
 UNWIND range(1, 200) AS n
 MERGE (m:SmartMeter {meter_id: 'SM_' + toString(n)})
@@ -141,9 +119,7 @@ ON CREATE SET
   m.phase        = CASE WHEN n % 3 = 0 THEN 'three-phase' ELSE 'single' END;
 
 
-// ── GSP → SUBSTATION :FEEDS ──────────────────────────────────────
-// feeder_id is the identifying property in MERGE — prevents duplicate edges
-// ON CREATE SET for other properties (voltage_kV, length_km)
+// ── GSP → Substation :FEEDS (feeder_id keys the MERGE) ───────────
 
 MATCH (g:GridSupplyPoint {gsp_id: 'GSP_NORTH'})
 UNWIND [
@@ -170,9 +146,7 @@ MERGE (g)-[r:FEEDS {feeder_id: props.fdr}]->(s)
 ON CREATE SET r.voltage_kV = props.v, r.length_km = props.km;
 
 
-// ── SUBSTATION → TRANSFORMER :SUPPLIES ───────────────────────────
-// tx_start gives the first TX number for that substation
-// range(tx_start, tx_start+3) gives 4 transformers per substation
+// ── Substation → Transformer :SUPPLIES (4 per substation) ────────
 
 UNWIND [
   {ss:'SS_001', tx_start:1},  {ss:'SS_002', tx_start:5},
@@ -188,11 +162,7 @@ MERGE (s)-[r:SUPPLIES {cable_id: 'CBL_' + toString(tx_n)}]->(t)
 ON CREATE SET r.distance_m = 150 + (tx_n * 10);
 
 
-// ── TRANSFORMER → SMART METER :CONNECTS_TO ───────────────────────
-// TX_n owns meters SM_(5n-4) through SM_(5n)
-// TX_1  → SM_1..SM_5    (range: 1  to 5)
-// TX_2  → SM_6..SM_10   (range: 6  to 10)
-// TX_40 → SM_196..SM_200 (range: 196 to 200)
+// ── Transformer → Smart Meter :CONNECTS_TO (TX_n owns SM_(5n-4)..SM_(5n)) ──
 
 UNWIND range(1, 40) AS tx_n
 MATCH (t:Transformer {asset_id: 'TX_' + toString(tx_n)})
@@ -201,9 +171,7 @@ MATCH (m:SmartMeter {meter_id: 'SM_' + toString(m_n)})
 MERGE (t)-[:CONNECTS_TO]->(m);
 
 
-// ── ALTERNATIVE_FEED (normally-open tie switches) ─────────────────
-// Models backup feed paths between adjacent substations.
-// tie_switch_id is the identifying property — prevents duplicate edges.
+// ── ALTERNATIVE_FEED: normally-open tie switches (backup feed paths) ──
 
 MATCH (a:Substation {substation_id: 'SS_001'})
 MATCH (b:Substation {substation_id: 'SS_002'})
@@ -226,12 +194,9 @@ MERGE (a)-[r:ALTERNATIVE_FEED {tie_switch_id: 'TS_004'}]->(b)
 ON CREATE SET r.normally_open = true;
 
 
-// ── NORMALIZE node_id PROPERTY ───────────────────────────────────
-// grid.py (Trap 4/6 fixes) matches nodes generically via {node_id: $id}.
-// Each label uses a domain-specific identifier (gsp_id, substation_id,
-// asset_id, meter_id) — this copies that value into a common node_id
-// property so the API can MATCH any node type uniformly.
-// Idempotent: SET to the same value twice is harmless — no duplicates.
+// ── Normalise node_id ────────────────────────────────────────────
+// Copy each label's domain-specific id into a common node_id property,
+// so the API can MATCH any node type uniformly via {node_id: $id}.
 
 MATCH (n:GridSupplyPoint) SET n.node_id = n.gsp_id;
 MATCH (n:Substation)      SET n.node_id = n.substation_id;

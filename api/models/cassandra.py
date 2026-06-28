@@ -1,17 +1,5 @@
-# api/models/cassandra.py
-# Pydantic models for Cassandra-backed endpoints
-#
-# Week 5 Slide 82: BaseModel validates incoming JSON automatically.
-# Wrong type or missing field → FastAPI returns 422 before DB is touched.
-# model_dump() serialises a validated model to a dict for DB writes.
-#
-# All types match cql/init.cql exactly:
-#   TEXT       → str
-#   FLOAT      → float
-#   INT        → int       (quality_flag — NOT tinyint, Trap 7 fix)
-#   TIMESTAMP  → datetime
-#   TIMEUUID   → UUID
-#   BOOLEAN    → bool
+# Pydantic models for Cassandra-backed endpoints.
+# Types mirror cql/init.cql (quality_flag is INT, event_time is TIMEUUID/UUID).
 
 from datetime import datetime
 from uuid import UUID
@@ -19,17 +7,10 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 
-# ── SENSOR READING — INPUT ────────────────────────────────────────
-# Used by: POST /sensors/readings
-# Written to: sensor_readings AND sensor_readings_by_time tables
-#
-# reading_time is Optional — if not provided by the client, the router
-# inserts the current UTC time. This prevents clock-skew issues where
-# a client with a bad clock submits readings with wrong timestamps.
-
 class SensorReadingIn(BaseModel):
     sensor_id:    str           = Field(..., min_length=1, max_length=100,
                                         description="Unique sensor identifier")
+    # Optional — router fills in server UTC if omitted.
     reading_time: Optional[datetime] = Field(
                                         default=None,
                                         description="UTC timestamp — defaults to server time if omitted")
@@ -52,13 +33,6 @@ class SensorReadingIn(BaseModel):
     }}
 
 
-# ── SENSOR READING — RESPONSE ─────────────────────────────────────
-# Used by: GET /sensors/{sensor_id}/readings
-# Read from: sensor_readings table
-#
-# reading_time comes back from Cassandra as a Python datetime —
-# Pydantic serialises it to ISO 8601 string in the JSON response.
-
 class SensorReadingOut(BaseModel):
     sensor_id:    str
     reading_time: datetime
@@ -67,16 +41,8 @@ class SensorReadingOut(BaseModel):
     unit:         Optional[str]  = None
     quality_flag: Optional[int]  = None
 
-    # Allow datetime objects from Cassandra ResultSet rows
     model_config = {"from_attributes": True}
 
-
-# ── SENSOR SUMMARY — RESPONSE ─────────────────────────────────────
-# Used by: GET /sensors/{sensor_id}/summary
-# Source: Redis cache (cache-aside) → Cassandra on cache miss
-#
-# Summary aggregates the last N readings for a sensor:
-# latest value per metric_type, reading count, time window
 
 class SensorSummaryOut(BaseModel):
     sensor_id:     str
@@ -94,13 +60,6 @@ class SensorSummaryOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
-# ── RELAY EVENT — INPUT ───────────────────────────────────────────
-# Used by: POST /alerts/publish (also writes to relay_events table)
-#
-# event_time is Optional — if omitted, router generates a TIMEUUID
-# using uuid1() which embeds the current timestamp at nanosecond
-# resolution. This is the correct Cassandra TIMEUUID pattern.
 
 class RelayEventIn(BaseModel):
     feeder_id:  str           = Field(..., min_length=1, max_length=50,
@@ -128,10 +87,6 @@ class RelayEventIn(BaseModel):
     }}
 
 
-# ── RELAY EVENT — RESPONSE ────────────────────────────────────────
-# Used by: GET /alerts/active
-# event_time is UUID (TIMEUUID from Cassandra) — serialised to string
-
 class RelayEventOut(BaseModel):
     feeder_id:  str
     event_time: UUID
@@ -143,10 +98,6 @@ class RelayEventOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
-# ── QUERY PARAMETERS ──────────────────────────────────────────────
-# Reusable parameter model for GET /sensors/{sensor_id}/readings
-# Encapsulates limit + optional time window filter
 
 class SensorReadingQuery(BaseModel):
     limit:      int                  = Field(default=10,  ge=1, le=1000,
