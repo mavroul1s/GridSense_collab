@@ -1,30 +1,11 @@
-# api/models/mongo.py
-# Pydantic models for MongoDB-backed equipment catalog endpoints
-#
-# Week 5 Slide 24: schema flexibility — different equipment types
-# have different field sets. MongoDB stores them in one collection;
-# Pydantic models validate each type at the API boundary.
-#
-# Week 5 Slides 27-29: schema versioning — schema_version field on
-# every document allows old records to coexist with new ones without
-# migration. Application code branches on schema_version when needed.
-#
-# Three equipment schema shapes (assignment requirement: 3+ shapes):
-#   1. Transformer    — electrical ratings, oil monitoring, tap changer
-#   2. SmartMeter     — firmware, comms protocol, metrology class
-#   3. ProtectionRelay — protection curves, pickup settings, auto-reclose
-#
-# extra_fields: dict on every model captures arbitrary manufacturer-
-# specific telemetry (Part A A.5 Case 4 — the 40 non-standard fields).
+# Pydantic models for MongoDB-backed equipment catalog endpoints.
+# Three schema shapes share one collection; extra_fields holds arbitrary
+# manufacturer telemetry without a migration.
 
 from typing import Optional, Literal, Any
 from datetime import date, datetime
 from pydantic import BaseModel, Field
 
-
-# ── EQUIPMENT TYPE DISCRIMINATOR ──────────────────────────────────
-# Constrains the equipment_type field to known valid values.
-# Prevents arbitrary strings entering the catalog collection.
 
 EquipmentType = Literal[
     "Transformer",
@@ -33,16 +14,8 @@ EquipmentType = Literal[
 ]
 
 
-# ── BASE EQUIPMENT MODEL ──────────────────────────────────────────
-# Fields shared by ALL equipment types.
-# Subclasses add type-specific fields on top.
-#
-# asset_id links MongoDB documents to Neo4j nodes —
-# the same asset_id appears in both stores. This is the referencing
-# pattern (Week 5 Slide 68): MongoDB owns catalog detail,
-# Neo4j owns topology relationships.
-
 class EquipmentBase(BaseModel):
+    # asset_id is the cross-store key (matches Neo4j node_id).
     asset_id:        str          = Field(..., min_length=1, max_length=100,
                                           description="Unique asset identifier — matches Neo4j node_id")
     equipment_type:  EquipmentType = Field(..., description="Equipment category")
@@ -53,23 +26,12 @@ class EquipmentBase(BaseModel):
     last_inspection: Optional[date] = Field(default=None, description="Most recent inspection date")
     status:          str          = Field(default="active",
                                           description="Operational status: active, maintenance, decommissioned")
-    schema_version:  int          = Field(default=1,
-                                          description="Schema version — Week 5 Slide 27 versioning pattern")
-    # Captures arbitrary manufacturer-specific telemetry fields.
-    # Part A A.5 Case 4: a new meter with 40 non-standard fields
-    # stores them here without schema migration.
-    # Week 5 Slide 24: duplicate data is acceptable when it saves
-    # expensive restructuring operations.
+    schema_version:  int          = Field(default=1, description="Document schema version")
     extra_fields:    dict[str, Any] = Field(
                          default_factory=dict,
                          description="Arbitrary manufacturer-specific fields — no migration required"
                      )
 
-
-# ── SCHEMA SHAPE 1: TRANSFORMER ───────────────────────────────────
-# Transformer-specific catalog fields.
-# Links to Neo4j Transformer nodes via asset_id.
-# Links to Cassandra sensor_readings via sensor_id prefix.
 
 class TransformerIn(EquipmentBase):
     equipment_type:      Literal["Transformer"] = "Transformer"
@@ -111,11 +73,6 @@ class TransformerIn(EquipmentBase):
         }
     }}
 
-
-# ── SCHEMA SHAPE 2: SMART METER ───────────────────────────────────
-# SmartMeter-specific catalog fields.
-# Links to Neo4j SmartMeter nodes and PostgreSQL consumer_accounts
-# via premise_id.
 
 class SmartMeterIn(EquipmentBase):
     equipment_type:        Literal["SmartMeter"] = "SmartMeter"
@@ -159,11 +116,6 @@ class SmartMeterIn(EquipmentBase):
     }}
 
 
-# ── SCHEMA SHAPE 3: PROTECTION RELAY ─────────────────────────────
-# Protection relay catalog fields.
-# Relays generate the events stored in Cassandra relay_events table.
-# asset_id prefixed 'RELAY_' — no Neo4j node but links via feeder_id.
-
 class ProtectionRelayIn(EquipmentBase):
     equipment_type:       Literal["ProtectionRelay"] = "ProtectionRelay"
     feeder_id:            str    = Field(..., description="Feeder this relay protects")
@@ -205,23 +157,13 @@ class ProtectionRelayIn(EquipmentBase):
     }}
 
 
-# ── UNION INPUT TYPE ──────────────────────────────────────────────
-# The POST /equipment router accepts any of the three shapes.
-# FastAPI uses the equipment_type discriminator to validate the
-# correct submodel automatically.
-
 from typing import Union
 from pydantic import Discriminator
 
 EquipmentIn = Union[TransformerIn, SmartMeterIn, ProtectionRelayIn]
 
 
-# ── EQUIPMENT RESPONSE ────────────────────────────────────────────
-# GET /equipment/{asset_id} returns a flexible dict — MongoDB documents
-# have varying shapes and we do not want to force a rigid output schema.
-# The router calls serialise_doc() from db/mongo.py then returns directly.
-# This class is used for OpenAPI documentation only.
-
+# Used for OpenAPI docs only — GET returns the raw flexible document.
 class EquipmentOut(BaseModel):
     id:             Optional[str]  = Field(default=None, alias="_id")
     asset_id:       str
@@ -235,14 +177,9 @@ class EquipmentOut(BaseModel):
 
     model_config = {
         "from_attributes":  True,
-        "populate_by_name": True,   # allow both '_id' and 'id'
+        "populate_by_name": True,
     }
 
-
-# ── EQUIPMENT PARTIAL UPDATE ──────────────────────────────────────
-# Used by: PATCH /equipment/{asset_id}
-# All fields Optional — PATCH updates only what is provided.
-# Week 5 Slide 59: PATCH updates partial fields, PUT replaces entire doc.
 
 class EquipmentUpdate(BaseModel):
     manufacturer:    Optional[str]  = None

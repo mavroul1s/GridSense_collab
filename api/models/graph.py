@@ -1,25 +1,9 @@
-# api/models/graph.py
-# Pydantic models for Neo4j-backed endpoints
-#
-# Week 5 Slide 82: BaseModel validates all inputs before any Cypher runs.
-#
-# Critical design note — Trap 4 fix:
-# max_depth is validated HERE as a bounded integer (1–10).
-# The router uses it as: f"MATCH (o)-[:FEEDS|...]*1..{max_depth}]->(n)"
-# It is NEVER passed as a Cypher parameter ($depth) because Cypher
-# does not allow parameters as variable-length path bounds.
-# Validation here ensures the f-string interpolation is safe —
-# only a clean integer in range 1-10 ever reaches the query string.
+# Pydantic models for Neo4j-backed endpoints.
+# Literal-constrained labels/types make the router's f-string Cypher safe from injection.
 
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
-
-# ── VALID LABEL AND RELATIONSHIP CONSTANTS ────────────────────────
-# From Part A A.4.b property graph model.
-# Constraining to Literal types means Pydantic rejects any node label
-# or relationship type not in the approved set — no arbitrary Cypher
-# injection through the label field.
 
 NodeLabel = Literal[
     "GridSupplyPoint",
@@ -36,41 +20,21 @@ RelationshipType = Literal[
 ]
 
 
-# ── FAULT IMPACT — QUERY PARAMETERS ──────────────────────────────
-# Used by: GET /grid/fault-impact/{node_id}
-#
-# max_depth: the traversal depth bound.
-# TRAP 4 FIX: this value is validated here as int in range 1-10.
-# The router interpolates it directly into the Cypher f-string:
-#     f"MATCH (o)-[:FEEDS|SUPPLIES|CONNECTS_TO*1..{params.max_depth}]->(n)"
-# It is NEVER passed as $depth — that syntax is invalid in Cypher.
-
 class FaultImpactParams(BaseModel):
+    # Validated here (1-10) because the router interpolates it as a Cypher path bound.
     max_depth: int = Field(
         default=6,
         ge=1,
         le=10,
-        description=(
-            "Maximum traversal depth (1–10). "
-            "Injected as f-string bound in Cypher — never as $parameter. "
-            "Validated here to prevent unbounded graph scans."
-        )
+        description="Maximum traversal depth (1–10) — bounds the graph scan."
     )
 
-
-# ── AFFECTED NODE — RESPONSE ITEM ────────────────────────────────
-# One downstream node returned by fault-impact traversal.
-# Different node types have different properties — Optional fields
-# are None when the node type does not carry that property.
-#
-# depth: hops from origin — comes from length(path) in the Cypher MATCH.
-# TRAP 5 FIX: never computed via shortestPath() in RETURN clause.
 
 class AffectedNodeOut(BaseModel):
     node_type:   str            = Field(..., description="Node label: Substation, Transformer, SmartMeter")
     node_id:     str            = Field(..., description="Unique node identifier property")
     name:        Optional[str]  = Field(default=None, description="Human-readable name if available")
-    depth:       int            = Field(..., description="Hops from fault origin — from length(path)")
+    depth:       int            = Field(..., description="Hops from fault origin")
     voltage_kV:  Optional[float] = Field(default=None, description="Nominal voltage (Substation/GSP only)")
     rating_kVA:  Optional[int]   = Field(default=None, description="Transformer rating in kVA")
     premise_id:  Optional[str]   = Field(default=None, description="Premise ID (SmartMeter only)")
@@ -79,10 +43,6 @@ class AffectedNodeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ── FAULT IMPACT — FULL RESPONSE ──────────────────────────────────
-# Used by: GET /grid/fault-impact/{node_id}
-# Returns the origin node identity + all downstream affected nodes.
-
 class FaultImpactOut(BaseModel):
     origin_node_id:   str
     origin_node_type: str
@@ -90,11 +50,6 @@ class FaultImpactOut(BaseModel):
     affected_count:   int
     affected_nodes:   list[AffectedNodeOut]
 
-
-# ── RESTORE PATH — RESPONSE ITEM ─────────────────────────────────
-# Used by: GET /grid/restore-paths/{node_id}
-# Returns alternative feed paths (ALTERNATIVE_FEED relationships)
-# that could restore supply to the affected substation.
 
 class RestorePathNodeOut(BaseModel):
     node_id:    str
@@ -110,20 +65,13 @@ class RestorePathOut(BaseModel):
     path_count:     int
 
 
-# ── NODE CREATION — INPUT ─────────────────────────────────────────
-# Used by: POST /grid/nodes
-#
-# label is constrained to NodeLabel Literal — prevents arbitrary labels.
-# properties dict carries node-type-specific fields.
-# node_id must be present in properties — it is the MERGE key in Cypher.
-
 class NodeIn(BaseModel):
     label:      NodeLabel = Field(..., description="Node label — must be one of the four valid types")
     properties: dict      = Field(..., description="Node properties dict — must include node_id key")
 
     @property
     def node_id(self) -> str:
-        """Convenience accessor — raises if node_id missing from properties."""
+        """node_id from properties — raises if missing (becomes a 422)."""
         nid = self.properties.get("node_id")
         if not nid:
             raise ValueError("properties dict must contain a 'node_id' key")
@@ -144,7 +92,6 @@ class NodeIn(BaseModel):
     }}
 
 
-# ── NODE CREATION — RESPONSE ──────────────────────────────────────
 class NodeOut(BaseModel):
     label:      str
     node_id:    str
@@ -152,14 +99,6 @@ class NodeOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
-# ── RELATIONSHIP CREATION — INPUT ─────────────────────────────────
-# Used by: POST /grid/relationships
-#
-# rel_type constrained to RelationshipType Literal.
-# from_id / to_id are node_id property values — the router looks up
-# the actual nodes via MATCH (n {node_id: $from_id}) before MERGE.
-# properties dict carries relationship-specific fields (feeder_id, etc.)
 
 class RelationshipIn(BaseModel):
     from_id:    str              = Field(..., description="node_id of the source node")
@@ -182,7 +121,6 @@ class RelationshipIn(BaseModel):
     }}
 
 
-# ── RELATIONSHIP CREATION — RESPONSE ─────────────────────────────
 class RelationshipOut(BaseModel):
     from_id:    str
     to_id:      str
