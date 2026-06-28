@@ -11,11 +11,13 @@ from models.postgres import ConsumerAccountIn, ConsumerAccountOut, InvoiceIn, In
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
 
+# Normalise a DB row for JSON output (Decimal→float, JSONB str→dict).
 def _decimal_to_float(row: dict | None) -> dict | None:
     """Convert NUMERIC Decimals to float and parse JSONB string fields to dict."""
     if row is None:
         return None
 
+    # Walk each column and normalise its type for JSON output.
     result = {}
     for k, v in row.items():
         if isinstance(v, Decimal):
@@ -27,9 +29,11 @@ def _decimal_to_float(row: dict | None) -> dict | None:
     return result
 
 
+# GET /billing/account/{id} — fetch a consumer account.
 @router.get("/account/{premise_id}", response_model=ConsumerAccountOut)
 async def get_account(premise_id: str):
     """Fetch a consumer account and its JSONB tariff structure."""
+    # Look up the account by primary key.
     row = await fetch_one(
         """
         SELECT
@@ -46,6 +50,7 @@ async def get_account(premise_id: str):
         premise_id
     )
 
+    # 404 if no such account.
     if row is None:
         raise HTTPException(
             status_code=404,
@@ -55,11 +60,14 @@ async def get_account(premise_id: str):
     return _decimal_to_float(row)
 
 
+# GET /billing/accounts/tariff — list accounts by tariff class.
 @router.get("/accounts/tariff")
 async def get_accounts_by_tariff(tariff_class: str):
     """List accounts matching a tariff class via the @> containment operator (GIN index)."""
+    # Build the JSONB subset to match against.
     subset = json.dumps({"tariff_class": tariff_class})
 
+    # Containment query — uses the GIN index, not a full scan.
     rows = await fetch_all(
         """
         SELECT premise_id, name, tariff_info, balance
@@ -74,9 +82,11 @@ async def get_accounts_by_tariff(tariff_class: str):
     return [_decimal_to_float(row) for row in rows]
 
 
+# POST /billing/invoice — create an invoice and adjust the balance.
 @router.post("/invoice", response_model=InvoiceOut, status_code=201)
 async def create_invoice(invoice: InvoiceIn):
     """Create an invoice and update the account balance in one atomic transaction."""
+    # Verify the account exists.
     account = await fetch_one(
         "SELECT premise_id, balance FROM consumer_accounts WHERE premise_id = $1",
         invoice.premise_id
@@ -87,7 +97,7 @@ async def create_invoice(invoice: InvoiceIn):
             detail=f"Account '{invoice.premise_id}' not found"
         )
 
-    # Explicit duplicate check returns a clean 409 instead of a UniqueViolation 500.
+    # Reject a duplicate invoice for the same period (clean 409 vs DB 500).
     existing = await fetch_one(
         """
         SELECT invoice_id FROM invoices
@@ -108,20 +118,22 @@ async def create_invoice(invoice: InvoiceIn):
             )
         )
 
-    # Total is computed server-side, never trusted from the client.
+    # Compute the total server-side; never trust the client's figure.
     amount_due = round(
         sum(item.amount for item in invoice.line_items),
         2
     )
 
+    # Serialise line items for the JSONB column.
     line_items_json = json.dumps(
         [item.model_dump(mode="json") for item in invoice.line_items]
     )
 
-    # INSERT invoice + UPDATE balance are all-or-nothing.
+    # Compute the new balance.
     current_balance = float(account["balance"])
     new_balance = round(current_balance - amount_due, 2)
 
+    # Insert the invoice and update the balance atomically.
     await execute_transaction([
         (
             """
@@ -149,6 +161,7 @@ async def create_invoice(invoice: InvoiceIn):
         ),
     ])
 
+    # Read back and return the created invoice.
     created = await fetch_one(
         """
         SELECT

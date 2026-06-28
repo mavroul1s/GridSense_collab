@@ -1,5 +1,7 @@
+# GridSense polyglot stack: 5 databases + API + one-shot init/seed jobs.
 services:
 
+  # Cassandra — time-series store for sensor readings and relay events.
   timeseries-db:
     image: cassandra:4.1
     container_name: gridsense_cassandra
@@ -12,12 +14,14 @@ services:
       HEAP_NEWSIZE: "128M"
     volumes:
       - cassandra_data:/var/lib/cassandra
+    # Mark healthy only once the node reports Up/Normal.
     healthcheck:
       test: ["CMD-SHELL", "nodetool status | grep -q '^UN'"]
       interval: 30s
       timeout: 10s
       retries: 10
 
+  # One-shot job — applies the CQL schema once Cassandra is healthy.
   cassandra-init:
     image: cassandra:4.1
     depends_on:
@@ -28,6 +32,7 @@ services:
     command: bash -c "sleep 5 && cqlsh timeseries-db -f /init.cql"
     restart: on-failure
 
+  # Neo4j — graph store for the grid network topology.
   graph-db:
     image: neo4j:5-community
     container_name: gridsense_neo4j
@@ -42,12 +47,14 @@ services:
     volumes:
       - neo4j_data:/data
       - ./neo4j/import:/import
+    # Mark healthy once the HTTP endpoint responds.
     healthcheck:
       test: ["CMD", "wget", "-O", "/dev/null", "http://localhost:7474"]
       interval: 20s
       timeout: 5s
       retries: 8
 
+  # One-shot job — loads the topology seed once Neo4j is healthy.
   neo4j-init:
     image: neo4j:5-community
     depends_on:
@@ -60,6 +67,7 @@ services:
     command: bash -c "cypher-shell -a bolt://graph-db:7687 -u neo4j -p ${NEO4J_PASSWORD} -f /import/seed.cypher"
     restart: on-failure
 
+  # MongoDB — document store for the flexible equipment catalog.
   catalog-db:
     image: mongo:7
     container_name: gridsense_mongo
@@ -69,6 +77,7 @@ services:
     volumes:
       - mongo_data:/data/db
 
+  # PostgreSQL — relational store for billing; init.sql runs on first boot.
   billing-db:
     image: postgres:15
     container_name: gridsense_postgres
@@ -81,6 +90,7 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./pg/init.sql:/docker-entrypoint-initdb.d/init.sql
 
+  # Redis — cache and Pub/Sub backend for alerts.
   cache:
     image: redis:7-alpine
     container_name: gridsense_redis
@@ -90,6 +100,7 @@ services:
     volumes:
       - redis_data:/data
 
+  # FastAPI service — waits for every datastore before starting.
   api:
     build: ./api
     container_name: gridsense_api
@@ -114,6 +125,7 @@ services:
       cache:
         condition: service_started
 
+  # One-shot job — populates all stores with demo data, then exits.
   seed:
     build: ./api
     container_name: gridsense_seed
@@ -135,6 +147,7 @@ services:
     command: ["python", "scripts/seed.py"]
     restart: "no"
 
+# Named volumes — persist each database across container restarts.
 volumes:
   cassandra_data:
   neo4j_data:
@@ -142,6 +155,7 @@ volumes:
   pg_data:
   redis_data:
 
+# Shared bridge network so services reach each other by name.
 networks:
   default:
     name: gridsense_net

@@ -21,12 +21,13 @@ router = APIRouter(prefix="/grid", tags=["Grid Topology"])
 DOWNSTREAM_RELS = "FEEDS|SUPPLIES|CONNECTS_TO"
 
 
+# GET /grid/fault-impact/{id} — nodes downstream of a fault origin.
 @router.get("/fault-impact/{node_id}", response_model=FaultImpactOut)
 async def fault_impact(node_id: str, params: FaultImpactParams = FaultImpactParams()):
     """All nodes downstream of node_id within max_depth hops."""
-    # max_depth is f-string-interpolated because Cypher rejects parameters as path bounds;
-    # safe only because FaultImpactParams already validated it as an int in 1-10.
-    # depth comes from length(path), not shortestPath() in RETURN (avoids per-row full scans).
+    # Build the traversal. max_depth is interpolated (Cypher can't parameterise a
+    # path bound) but is safe because the model validated it to an int in 1-10.
+    # depth uses length(path), not shortestPath(), to avoid a per-row full scan.
     cypher = f"""
         MATCH (origin {{node_id: $node_id}})
         MATCH path = (origin)-[:{DOWNSTREAM_RELS}*1..{params.max_depth}]->(downstream)
@@ -42,16 +43,18 @@ async def fault_impact(node_id: str, params: FaultImpactParams = FaultImpactPara
         ORDER BY depth, node_id
     """
 
+    # Run the traversal.
     rows = await run_query(cypher, {"node_id": node_id})
 
+    # Empty result — distinguish a missing node from a leaf node.
     if not rows:
-        # Empty could mean "no downstream" or "node missing" — disambiguate.
+        # Node truly absent → 404.
         if not await node_exists(node_id):
             raise HTTPException(
                 status_code=404,
                 detail=f"Node '{node_id}' not found in network topology"
             )
-        # Node exists but is a leaf (e.g. end-of-line SmartMeter).
+        # Node exists but has nothing downstream → return an empty impact set.
         origin_rows = await run_query(
             "MATCH (n {node_id: $node_id}) RETURN labels(n)[0] AS node_type",
             {"node_id": node_id}
@@ -64,11 +67,13 @@ async def fault_impact(node_id: str, params: FaultImpactParams = FaultImpactPara
             affected_nodes=[],
         )
 
+    # Look up the origin's label for the response header.
     origin_rows = await run_query(
         "MATCH (n {node_id: $node_id}) RETURN labels(n)[0] AS node_type",
         {"node_id": node_id}
     )
 
+    # Map rows to the affected-node model and return.
     affected = [AffectedNodeOut(**row) for row in rows]
 
     return FaultImpactOut(
@@ -80,11 +85,11 @@ async def fault_impact(node_id: str, params: FaultImpactParams = FaultImpactPara
     )
 
 
+# GET /grid/restore-paths/{id} — alternative backup feed paths.
 @router.get("/restore-paths/{node_id}", response_model=RestorePathOut)
 async def restore_paths(node_id: str):
     """Alternative feed paths to a substation via :ALTERNATIVE_FEED tie switches."""
-    # 1. origin -[:ALTERNATIVE_FEED]- neighbour (undirected — ties aren't directional)
-    # 2. confirm the neighbour has its own live upstream supply
+    # Find tie-switch neighbours and confirm each has its own live upstream supply.
     cypher = """
         MATCH (origin:Substation {node_id: $node_id})
         MATCH (origin)-[:ALTERNATIVE_FEED]-(neighbour:Substation)
@@ -99,20 +104,23 @@ async def restore_paths(node_id: str):
         ORDER BY neighbour_id
     """
 
+    # Run the query.
     rows = await run_query(cypher, {"node_id": node_id})
 
+    # Empty result — distinguish a missing node from one with no tie switches.
     if not rows:
         if not await node_exists(node_id):
             raise HTTPException(
                 status_code=404,
                 detail=f"Substation '{node_id}' not found in network topology"
             )
-        # Exists but has no tie switches — valid, empty result.
         return RestorePathOut(origin_node_id=node_id, paths=[], path_count=0)
 
+    # Build one path per neighbour.
     paths: list[list[RestorePathNodeOut]] = []
 
     for row in rows:
+        # Start each path with origin → neighbour.
         path_nodes = [
             RestorePathNodeOut(
                 node_id=row["origin_id"],
@@ -125,7 +133,7 @@ async def restore_paths(node_id: str):
                 name=row["neighbour_name"],
             ),
         ]
-        # Append the upstream GSP only if the OPTIONAL MATCH found one.
+        # Append the upstream GSP when the optional match found one.
         if row["supply_id"] is not None:
             path_nodes.append(
                 RestorePathNodeOut(
@@ -143,21 +151,24 @@ async def restore_paths(node_id: str):
     )
 
 
+# POST /grid/nodes — create or update a topology node.
 @router.post("/nodes", response_model=NodeOut, status_code=201)
 async def create_node(node: NodeIn):
     """Create or idempotently update a node (MERGE on node_id)."""
+    # Pull node_id out of properties; a missing key becomes a 422.
     try:
-        node_id_value = node.node_id  # raises ValueError if missing
+        node_id_value = node.node_id
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
-    # label is Literal-constrained, so f-string interpolation is safe (Cypher can't parameterise labels).
+    # MERGE on node_id. label is Literal-constrained, so the f-string is safe.
     cypher = f"""
         MERGE (n:{node.label} {{node_id: $node_id}})
         SET n += $properties
         RETURN labels(n)[0] AS label, n.node_id AS node_id, properties(n) AS properties
     """
 
+    # Run the write and return the stored node.
     result = await run_write(cypher, {
         "node_id": node_id_value,
         "properties": node.properties,
@@ -166,9 +177,11 @@ async def create_node(node: NodeIn):
     return NodeOut(**result[0])
 
 
+# POST /grid/relationships — create or update an edge between nodes.
 @router.post("/relationships", response_model=RelationshipOut, status_code=201)
 async def create_relationship(rel: RelationshipIn):
     """Create or idempotently update a relationship between two existing nodes (MERGE)."""
+    # Both endpoints must exist — return a clear 404 otherwise.
     if not await node_exists(rel.from_id):
         raise HTTPException(
             status_code=404,
@@ -180,7 +193,7 @@ async def create_relationship(rel: RelationshipIn):
             detail=f"Target node '{rel.to_id}' not found"
         )
 
-    # rel_type is Literal-constrained, so f-string interpolation is safe.
+    # MERGE the edge. rel_type is Literal-constrained, so the f-string is safe.
     cypher = f"""
         MATCH (a {{node_id: $from_id}})
         MATCH (b {{node_id: $to_id}})
@@ -190,6 +203,7 @@ async def create_relationship(rel: RelationshipIn):
                type(r) AS rel_type, properties(r) AS properties
     """
 
+    # Run the write and return the stored relationship.
     result = await run_write(cypher, {
         "from_id": rel.from_id,
         "to_id": rel.to_id,
