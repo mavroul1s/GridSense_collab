@@ -7,10 +7,11 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 
+# Request body for ingesting a sensor reading.
 class SensorReadingIn(BaseModel):
     sensor_id:    str           = Field(..., min_length=1, max_length=100,
                                         description="Unique sensor identifier")
-    # Optional — router fills in server UTC if omitted.
+    # reading_time is optional — the router fills server UTC if omitted.
     reading_time: Optional[datetime] = Field(
                                         default=None,
                                         description="UTC timestamp — defaults to server time if omitted")
@@ -33,6 +34,7 @@ class SensorReadingIn(BaseModel):
     }}
 
 
+# Response shape for a single sensor reading.
 class SensorReadingOut(BaseModel):
     sensor_id:    str
     reading_time: datetime
@@ -44,6 +46,7 @@ class SensorReadingOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Response shape for the aggregated per-sensor summary.
 class SensorSummaryOut(BaseModel):
     sensor_id:     str
     latest_values: dict[str, float] = Field(
@@ -61,6 +64,7 @@ class SensorSummaryOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Request body for publishing a relay fault event.
 class RelayEventIn(BaseModel):
     feeder_id:  str           = Field(..., min_length=1, max_length=50,
                                       description="Feeder identifier (e.g. F_001)")
@@ -87,6 +91,7 @@ class RelayEventIn(BaseModel):
     }}
 
 
+# Response shape for a stored relay event.
 class RelayEventOut(BaseModel):
     feeder_id:  str
     event_time: UUID
@@ -99,6 +104,7 @@ class RelayEventOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Query parameters for the readings endpoint.
 class SensorReadingQuery(BaseModel):
     limit:      int                  = Field(default=10,  ge=1, le=1000,
                                              description="Maximum readings to return")

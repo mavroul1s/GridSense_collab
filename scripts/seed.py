@@ -49,6 +49,7 @@ METRIC_UNITS = {
 }
 
 
+# Write sensor readings to both Cassandra tables.
 async def seed_cassandra():
     print("\n[Cassandra] Seeding sensor readings...")
 
@@ -100,6 +101,7 @@ RELAY_MODELS        = ["SEL-351S", "ABB-REF615", "Siemens-7SJ85", "GE-D60", "Sch
 MANUFACTURERS       = ["ABB", "Siemens", "Schneider Electric", "GE", "SEL", "Landis+Gyr"]
 
 
+# Upsert 30 equipment records (10 per type) into MongoDB.
 async def seed_mongo():
     print("\n[MongoDB] Seeding 30 equipment records...")
     col = equipment_collection()
@@ -235,6 +237,7 @@ ADDRESSES = [
 ]
 
 
+# Insert 100 accounts plus one invoice each into PostgreSQL.
 async def seed_postgres():
     print("\n[PostgreSQL] Seeding 100 consumer accounts...")
 
@@ -336,6 +339,7 @@ async def seed_postgres():
 
 
 # ── Neo4j: verify the neo4j-init container applied the seed ──────
+# Verify the neo4j-init container loaded the expected node counts.
 async def verify_neo4j():
     print("\n[Neo4j] Verifying seed data...")
 
@@ -365,6 +369,7 @@ async def verify_neo4j():
 
 # ── Redis: push 5 test alerts to the rolling buffer ──────────────
 
+# Push 5 test alerts into the Redis buffer.
 async def seed_redis():
     print("\n[Redis] Pushing 5 test alerts to buffer...")
     r = redis_db.get_redis()
@@ -429,6 +434,7 @@ async def seed_redis():
     print(f"[Redis] Done — 5 alerts in buffer")
 
 
+# Connect to every database, run all seeders, then disconnect.
 async def main():
     print("=" * 60)
     print("GridSense Seed Script")

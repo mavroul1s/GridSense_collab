@@ -5,6 +5,7 @@ from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
 
+# Allowed node labels.
 NodeLabel = Literal[
     "GridSupplyPoint",
     "Substation",
@@ -12,6 +13,7 @@ NodeLabel = Literal[
     "SmartMeter"
 ]
 
+# Allowed relationship types.
 RelationshipType = Literal[
     "FEEDS",
     "SUPPLIES",
@@ -20,8 +22,9 @@ RelationshipType = Literal[
 ]
 
 
+# Query params for fault-impact — bounds the traversal depth.
 class FaultImpactParams(BaseModel):
-    # Validated here (1-10) because the router interpolates it as a Cypher path bound.
+    # Validated 1-10 because the router interpolates it as a Cypher path bound.
     max_depth: int = Field(
         default=6,
         ge=1,
@@ -30,6 +33,7 @@ class FaultImpactParams(BaseModel):
     )
 
 
+# One downstream node returned by fault-impact.
 class AffectedNodeOut(BaseModel):
     node_type:   str            = Field(..., description="Node label: Substation, Transformer, SmartMeter")
     node_id:     str            = Field(..., description="Unique node identifier property")
@@ -43,6 +47,7 @@ class AffectedNodeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Full fault-impact response: origin plus all affected nodes.
 class FaultImpactOut(BaseModel):
     origin_node_id:   str
     origin_node_type: str
@@ -51,6 +56,7 @@ class FaultImpactOut(BaseModel):
     affected_nodes:   list[AffectedNodeOut]
 
 
+# One node along a restoration path.
 class RestorePathNodeOut(BaseModel):
     node_id:    str
     node_type:  str
@@ -59,12 +65,14 @@ class RestorePathNodeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Full restore-paths response: origin plus candidate paths.
 class RestorePathOut(BaseModel):
     origin_node_id: str
     paths:          list[list[RestorePathNodeOut]]
     path_count:     int
 
 
+# Request body for creating a graph node.
 class NodeIn(BaseModel):
     label:      NodeLabel = Field(..., description="Node label — must be one of the four valid types")
     properties: dict      = Field(..., description="Node properties dict — must include node_id key")
@@ -92,6 +100,7 @@ class NodeIn(BaseModel):
     }}
 
 
+# Response shape for a created/updated node.
 class NodeOut(BaseModel):
     label:      str
     node_id:    str
@@ -100,6 +109,7 @@ class NodeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Request body for creating a relationship between two nodes.
 class RelationshipIn(BaseModel):
     from_id:    str              = Field(..., description="node_id of the source node")
     to_id:      str              = Field(..., description="node_id of the target node")
@@ -121,6 +131,7 @@ class RelationshipIn(BaseModel):
     }}
 
 
+# Response shape for a created/updated relationship.
 class RelationshipOut(BaseModel):
     from_id:    str
     to_id:      str

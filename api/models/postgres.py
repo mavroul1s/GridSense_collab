@@ -1,9 +1,11 @@
-# api/models/postgres.py
+# Pydantic models for PostgreSQL-backed billing endpoints.
+
 from typing import Optional, Any, Literal
 from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 
+# Tariff shape for residential accounts.
 class ResidentialTariff(BaseModel):
     tariff_class:    Literal["residential"] = "residential"
     rate_per_kwh:    float = Field(..., gt=0)
@@ -13,6 +15,7 @@ class ResidentialTariff(BaseModel):
     night_end:       Optional[str]   = None
 
 
+# Tariff shape for commercial accounts.
 class CommercialTariff(BaseModel):
     tariff_class:         Literal["commercial"] = "commercial"
     rate_per_kwh:         float = Field(..., gt=0)
@@ -21,6 +24,7 @@ class CommercialTariff(BaseModel):
     power_factor_penalty: Optional[float] = None
 
 
+# Tariff shape for industrial accounts (time-of-use pricing).
 class IndustrialTariff(BaseModel):
     tariff_class:         Literal["industrial"] = "industrial"
     rate_per_kwh:         float = Field(..., gt=0)
@@ -34,6 +38,7 @@ class IndustrialTariff(BaseModel):
     regulatory_surcharge: float = 0.0
 
 
+# Request body for creating a consumer account.
 class ConsumerAccountIn(BaseModel):
     premise_id:  str            = Field(..., min_length=1, max_length=50)
     name:        str            = Field(..., min_length=1, max_length=200)
@@ -56,6 +61,7 @@ class ConsumerAccountIn(BaseModel):
     }}
 
 
+# Response shape for a consumer account.
 class ConsumerAccountOut(BaseModel):
     premise_id:  str
     name:        str
@@ -68,6 +74,7 @@ class ConsumerAccountOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# One line on an invoice.
 class InvoiceLineItem(BaseModel):
     description: str
     units:       float
@@ -76,6 +83,7 @@ class InvoiceLineItem(BaseModel):
     amount:      float
 
 
+# Request body for creating an invoice.
 class InvoiceIn(BaseModel):
     premise_id:      str                    = Field(..., min_length=1, max_length=50)
     period_start:    date                   = Field(...)
@@ -109,6 +117,7 @@ class InvoiceIn(BaseModel):
     }}
 
 
+# Response shape for a created invoice.
 class InvoiceOut(BaseModel):
     invoice_id:      int
     premise_id:      str
@@ -123,6 +132,7 @@ class InvoiceOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Request body for adjusting an account balance.
 class BalanceUpdate(BaseModel):
     premise_id: str
     delta:      float = Field(..., description="Positive to credit, negative to debit")

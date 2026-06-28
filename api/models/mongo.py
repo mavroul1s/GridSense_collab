@@ -7,6 +7,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 
+# Allowed equipment categories.
 EquipmentType = Literal[
     "Transformer",
     "SmartMeter",
@@ -14,6 +15,7 @@ EquipmentType = Literal[
 ]
 
 
+# Fields common to every equipment type.
 class EquipmentBase(BaseModel):
     # asset_id is the cross-store key (matches Neo4j node_id).
     asset_id:        str          = Field(..., min_length=1, max_length=100,
@@ -27,12 +29,14 @@ class EquipmentBase(BaseModel):
     status:          str          = Field(default="active",
                                           description="Operational status: active, maintenance, decommissioned")
     schema_version:  int          = Field(default=1, description="Document schema version")
+    # Open-ended bag for manufacturer-specific fields.
     extra_fields:    dict[str, Any] = Field(
                          default_factory=dict,
                          description="Arbitrary manufacturer-specific fields — no migration required"
                      )
 
 
+# Transformer-specific fields.
 class TransformerIn(EquipmentBase):
     equipment_type:      Literal["Transformer"] = "Transformer"
     rating_kVA:          int     = Field(..., gt=0, description="Rated capacity in kVA")
@@ -74,6 +78,7 @@ class TransformerIn(EquipmentBase):
     }}
 
 
+# Smart meter-specific fields.
 class SmartMeterIn(EquipmentBase):
     equipment_type:        Literal["SmartMeter"] = "SmartMeter"
     premise_id:            str    = Field(..., description="Links to consumer_accounts.premise_id")
@@ -116,6 +121,7 @@ class SmartMeterIn(EquipmentBase):
     }}
 
 
+# Protection relay-specific fields.
 class ProtectionRelayIn(EquipmentBase):
     equipment_type:       Literal["ProtectionRelay"] = "ProtectionRelay"
     feeder_id:            str    = Field(..., description="Feeder this relay protects")
@@ -160,10 +166,11 @@ class ProtectionRelayIn(EquipmentBase):
 from typing import Union
 from pydantic import Discriminator
 
+# Union of accepted input shapes for the POST endpoint.
 EquipmentIn = Union[TransformerIn, SmartMeterIn, ProtectionRelayIn]
 
 
-# Used for OpenAPI docs only — GET returns the raw flexible document.
+# OpenAPI-docs-only shape — GET returns the raw flexible document.
 class EquipmentOut(BaseModel):
     id:             Optional[str]  = Field(default=None, alias="_id")
     asset_id:       str
@@ -181,6 +188,7 @@ class EquipmentOut(BaseModel):
     }
 
 
+# Request body for a partial equipment update.
 class EquipmentUpdate(BaseModel):
     manufacturer:    Optional[str]  = None
     model:           Optional[str]  = None

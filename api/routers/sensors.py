@@ -12,16 +12,17 @@ from models.cassandra import SensorReadingIn, SensorReadingOut, SensorSummaryOut
 router = APIRouter(prefix="/sensors", tags=["Sensors"])
 
 
+# POST /sensors/readings — ingest one sensor reading.
 @router.post("/readings", status_code=201)
 async def ingest_reading(reading: SensorReadingIn):
     """Write a reading to both Cassandra tables and invalidate the summary cache."""
-    # Default to server UTC so devices with bad clocks don't corrupt time ordering.
+    # Fall back to server UTC when the client omits a timestamp.
     reading_time = reading.reading_time or datetime.now(timezone.utc)
 
-    # Minute-level bucket → one partition holds all sensors' readings for that minute.
+    # Derive the minute-level bucket used by the dashboard table.
     time_bucket = reading_time.strftime('%Y-%m-%dT%H:%M')
 
-    # Per-sensor table.
+    # Write to the per-sensor table.
     await execute_async(
         """
         INSERT INTO sensor_readings
@@ -38,7 +39,7 @@ async def ingest_reading(reading: SensorReadingIn):
         )
     )
 
-    # Dashboard (by-time) table — 2x write amplification, by design.
+    # Write the same reading to the by-time table (2x write amplification).
     await execute_async(
         """
         INSERT INTO sensor_readings_by_time
@@ -54,6 +55,7 @@ async def ingest_reading(reading: SensorReadingIn):
         )
     )
 
+    # Drop the now-stale cached summary for this sensor.
     await cache_delete(f"summary:{reading.sensor_id}")
 
     return {
@@ -64,6 +66,7 @@ async def ingest_reading(reading: SensorReadingIn):
     }
 
 
+# GET /sensors/{id}/readings — list a sensor's recent readings.
 @router.get("/{sensor_id}/readings", response_model=list[SensorReadingOut])
 async def get_readings(
     sensor_id:   str,
@@ -74,7 +77,7 @@ async def get_readings(
                                             description="Return readings after this UTC timestamp"),
 ):
     """Most recent N readings for a sensor, optionally filtered by time and/or metric."""
-    # ALLOW FILTERING below is scoped to a single partition (sensor_id), not the cluster.
+    # Time range + metric filter — ALLOW FILTERING stays within one partition.
     if since is not None and metric_type is not None:
         rows = await execute_async(
             """
@@ -89,8 +92,8 @@ async def get_readings(
             (sensor_id, since, metric_type, limit)
         )
 
+    # Time range only — valid on the first clustering key without ALLOW FILTERING.
     elif since is not None:
-        # Range on the first clustering key — no ALLOW FILTERING needed.
         rows = await execute_async(
             """
             SELECT sensor_id, reading_time, metric_type, value, unit, quality_flag
@@ -102,6 +105,7 @@ async def get_readings(
             (sensor_id, since, limit)
         )
 
+    # Metric filter only — single-partition ALLOW FILTERING.
     elif metric_type is not None:
         rows = await execute_async(
             """
@@ -115,6 +119,7 @@ async def get_readings(
             (sensor_id, metric_type, limit)
         )
 
+    # No filters — plain partition-key lookup, the fastest read.
     else:
         rows = await execute_async(
             """
@@ -126,6 +131,7 @@ async def get_readings(
             (sensor_id, limit)
         )
 
+    # 404 when the sensor has no readings at all.
     result = list(rows)
     if not result:
         raise HTTPException(
@@ -133,6 +139,7 @@ async def get_readings(
             detail=f"No readings found for sensor '{sensor_id}'"
         )
 
+    # Map driver rows to the response model.
     return [
         SensorReadingOut(
             sensor_id=row.sensor_id,
@@ -146,16 +153,19 @@ async def get_readings(
     ]
 
 
+# GET /sensors/{id}/summary — cached per-sensor summary.
 @router.get("/{sensor_id}/summary", response_model=SensorSummaryOut)
 async def get_sensor_summary(sensor_id: str):
-    """Cache-aside summary: Redis hit returns immediately, miss recomputes from Cassandra (TTL 30s)."""
+    """Cache-aside summary: serve from Redis on hit, recompute from Cassandra on miss (TTL 30s)."""
     cache_key = f"summary:{sensor_id}"
 
+    # Return immediately on a cache hit.
     cached = await cache_get(cache_key)
     if cached:
         cached["cached"] = True
         return SensorSummaryOut(**cached)
 
+    # Cache miss — pull the latest readings from Cassandra.
     rows = await execute_async(
         """
         SELECT sensor_id, reading_time, metric_type, value
@@ -166,6 +176,7 @@ async def get_sensor_summary(sensor_id: str):
         (sensor_id,)
     )
 
+    # 404 when the sensor has no readings.
     result = list(rows)
     if not result:
         raise HTTPException(
@@ -173,7 +184,7 @@ async def get_sensor_summary(sensor_id: str):
             detail=f"No readings found for sensor '{sensor_id}'"
         )
 
-    # Rows arrive reading_time DESC — first occurrence per metric_type is the latest.
+    # Aggregate: latest value per metric and the time window (rows are DESC).
     latest_values: dict[str, float] = {}
     times = []
 
@@ -182,6 +193,7 @@ async def get_sensor_summary(sensor_id: str):
             latest_values[row.metric_type] = row.value
         times.append(row.reading_time)
 
+    # Build the summary response.
     summary = SensorSummaryOut(
         sensor_id=sensor_id,
         latest_values=latest_values,
@@ -191,7 +203,7 @@ async def get_sensor_summary(sensor_id: str):
         cached=False,
     )
 
-    # mode="json" turns datetimes into ISO strings for Redis storage.
+    # Cache it as JSON for 30 seconds, then return.
     await cache_set(cache_key, summary.model_dump(mode="json"), ttl=30)
 
     return summary
