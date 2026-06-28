@@ -217,4 +217,4 @@ A full list of intentional traps identified in the assignment's starter material
 
 ## AI Use Disclosure
 
-See `AI_DISCLOSURE.md` for the full disclosure of AI assistance used in this project, per Section 1.5 of the assessment specification.
+AI was used to our benefit in the sense of a teacher–student process. It helped us understand certain parts of the code and the underlying logic more deeply, but it was not used to create or write anything independently. In today's world, the use of AI is essential, as it makes our work more efficient — yet we always employed it to deepen our understanding of the subject rather than to replace it.
